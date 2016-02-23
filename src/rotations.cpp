@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "rotations.h"
 #include "mt.h"
+#include "util.h"
 
 #define FALSE           0
 #define TRUE            1
@@ -12,13 +13,12 @@
 #define ONESQRT2        1.0/sqrt(2.0)
 #define MAX_MATRIX      10
 
-#ifndef NO_TRIG_TABLES
 //Fast versions of the trig functions, for quat_to_euler and cart_to_sph
-//double atantable[TRIG_TABLE_SIZE+1];
-//double acostable[TRIG_TABLE_SIZE+1];
+double atantable[TRIG_TABLE_SIZE+1];
+double acostable[TRIG_TABLE_SIZE+1];
 
 
-/*double table_atan2(const double y, const double x)
+double table_atan2(const double y, const double x)
 {
         double z,result;
         int mask,flip,index;
@@ -33,12 +33,14 @@
         flip=FALSE;
         if (x<0) mask |= 1;
         if (y<0) mask |= 2;
+        if ((x==0) && (y>=0)) return M_PI_2;
+        if ((x==0) && (y<0)) return 1.5*M_PI;
         z=fabs(y/x); // do not flip
         if (z>1.0) {flip=TRUE; z=1.0/z;}
         index=(int) (z*TRIG_TABLE_SIZE);
         //if (index<TRIG_TABLE_SIZE) {
                 result=atantable[index];
-        //} else {
+        //} else {*/
         //      result=M_PI_4;
         //}
         if (flip) result=M_PI_2-result;
@@ -54,11 +56,11 @@ double table_acos(const double x)
         if (index<0) {
                 result=M_PI_2;
         } else if (fabs(x)>0.99) {
-                result=sqrt(2*(1-fabs(x))); //First term in series expansion of acos(x) about x=1
+                result=sqrt(2*(1-fabs(x))); /*First term in series expansion of acos(x) about x=1*/
         } else result=acostable[index];
         if (!pos) result=M_PI-result;
         return result;
-}*/
+}
 
 void fill_trig_tables(void)
 {
@@ -72,11 +74,8 @@ void fill_trig_tables(void)
 	atantable[TRIG_TABLE_SIZE]=M_PI_4; //this way, if we overrun, we get pi/4
 	acostable[TRIG_TABLE_SIZE]=0;
 }
-#else
-//replace the table_XXX trig functions by standard implementations
-#define table_atan2 atan2
-#define table_acos acos
-#endif
+
+
 //Assumes all quaternions have four entries  Differs from wikipedia in that q[0] represents the real part,
 //whereas in wikipedia q_4 is the real part.  Steve's code also stores the real part first.
 //Convention used is "x-convention 3-1-3" as used in the Wikipedia article "Rotation formalisms in three dimensions."
@@ -165,10 +164,55 @@ void quat_to_matrix(double * q, double * r)
     r[8]=1.0-2.0*(q[1]*q[1]+q[2]*q[2]);
 }
 
+//Needed for processing crystallographic transformations.
+//Used to be bottom end of rmsd_fit (eq. 10 from paper by Coutsias et al.)
+void matrix_to_quat(const double r[3][3], double * q, double * maxev)
+{
+    double f[4][4], qq[4][4], q2[4],ev;
+    int iev,k;
+    f[0][0]=r[0][0]+r[1][1]+r[2][2];
+    f[0][1]=r[1][2]-r[2][1];
+    f[0][2]=r[2][0]-r[0][2];
+    f[0][3]=r[0][1]-r[1][0];
+    f[1][1]=r[0][0]-r[1][1]-r[2][2];
+    f[1][2]=r[0][1]+r[1][0];
+    f[1][3]=r[0][2]+r[2][0];
+    f[2][2]=-r[0][0]+r[1][1]-r[2][2];
+    f[2][3]=r[1][2]+r[2][1];
+    f[3][3]=-r[0][0]-r[1][1]+r[2][2];
+    //The matrix is symmetric.
+    f[1][0]=f[0][1];
+    f[2][0]=f[0][2];
+    f[3][0]=f[0][3];
+    f[2][1]=f[1][2];
+    f[3][1]=f[1][3];
+    f[3][2]=f[2][3];
+    //Calculate the eigenvalues with Jacobi's algorithm.
+    jacobi(4,&f[0][0],&qq[0][0]);
+    //Find the maximum eigenvalue and which one it is.
+    ev=-1.0e20;
+    for (k=0; k<4; k++) if (f[k][k]>ev) {
+        ev=f[k][k];
+        iev=k;
+    }
+    //The eigenvectors are stored as columns of qq. (Check this.)
+    //The quaternion is the eigenvector corresponding to the largest eigenvalue.
+    for (k=0; k<4; k++) q2[k]=qq[k][iev];
+    normalize_quat(q2); //Just to make sure.  Among other things ensures positive real part of quaternion.
+    conjugate_quat(q2,q);//For some reason we need this.  It probably compensates for having swapped something earlier.
+    *maxev=ev;
+}
+
+//overload not to have to provide for the maximum eigenvalue
+void matrix_to_quat(const double r[3][3], double * q)
+{
+    double maxev;
+    matrix_to_quat(r,q,&maxev);
+}
 //write q = (w, r)
 //v2 = v + 2r x (r x v + wv
 //v2 = v + 2(v x r + wv) x r to be consistent with other subroutines
-/*void rotate_vector_by_quat(const double * q, const double * v1, double * v2)
+void rotate_vector_by_quat(const double * q, const double * v1, double * v2)
 {
     double a[3];
     //r=q[1],q[2],q[3] v1=v1[0],v1[1],v1[2]
@@ -178,7 +222,7 @@ void quat_to_matrix(double * q, double * r)
     v2[0]=v1[0]+2.0*(a[1]*q[3]-q[2]*a[2]);
     v2[1]=v1[1]+2.0*(a[2]*q[1]-q[3]*a[0]);
     v2[2]=v1[2]+2.0*(a[0]*q[2]-q[1]*a[1]);
-}*/
+}
 //formulas from MathWorld article "Euler Angles", first part. They define their rotations
 //in the opposite sense to the Wikipedia article, so the matrix has been transposed to compensate.
 //possibly less efficient; for clarity, directness, testing
@@ -203,7 +247,7 @@ void euler_to_matrix(double phi, double theta, double psi, double * r)
     r[8]=ctheta;
 }
 
-void axisangle_to_quat(double alpha, double * axis, double * q)
+void axisangle_to_quat(const double alpha, const double * axis, double * q)
 {
     double chalpha,shalpha;
     chalpha=cos(0.5*alpha);
@@ -228,14 +272,14 @@ void normalize_quat(double * q)
 {
     double qnorm;
     qnorm=1/sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
-    if (q[0]<0) qnorm=-qnorm; //ensure positive real part
+    if (!is_quat_ok(q)) qnorm=-qnorm; //ensure positive real part
     q[0]=q[0]*qnorm;
     q[1]=q[1]*qnorm;
     q[2]=q[2]*qnorm;
     q[3]=q[3]*qnorm;
 }
 
-/*void multiply_quat(const double * qa, const double * qb, double * qc)
+void multiply_quat(const double * qa, const double * qb, double * qc)
 {
      //take Grossmann product to combine two rotations into one qd=qa*qb
   //rotate through the first vector. qd is our product
@@ -248,7 +292,26 @@ void normalize_quat(double * q)
   qc[1]=result[1];
   qc[2]=result[2];
   qc[3]=result[3];
-}*/
+}
+
+//The distance between two quaternions, cos(alpha/2) = Re(qa conj(qb))
+
+//need "fabs" here in case quaternions turn out to be negatives of each other
+double dist(const double * qa, const double * qb)
+{
+    double result = fabs(qa[0]*qb[0] + qa[1]*qb[1] + qa[2]*qb[2] + qa[3]*qb[3]);
+    return result;
+}
+
+bool is_quat_ok(const double * q)
+{
+    int k;
+    k=0;
+    //possibly change this to skip tiny values?
+    while ((k<4) && (fabs(q[k])<1e-6)) k++;
+    if (k==4) return false; //zero quat.
+    return (q[k]>0);
+}
 
 //qc=qa*qx^{-1} = qa * conj(qx) / |qx|^2
 //qc=qa*conj(qb) = qa * qb^-1 if qb is a unit quaternion
@@ -268,13 +331,13 @@ void normalize_quat(double * q)
 //}
 
 //qb=conj(qa)
-/*void conjugate_quat(const double * qa, double * qb)
+void conjugate_quat(const double * qa, double * qb)
 {
     qb[0]=qa[0];
     qb[1]=-qa[1];
     qb[2]=-qa[2];
     qb[3]=-qa[3];
-}*/
+}
 //c=A.b, A a 3x3 matrix and b a vector
 //Transposed A to be consistent with quat_to_matrix.
 void matmul(double * a, double * b, double * c)
@@ -378,7 +441,7 @@ void matmul2(double a[3][3], double b[3][3], double c[3][3])
 }
 
 /*Requires the distance r to be pre-computed.*/
-/*void cart_to_sph(const double * x, const double r, double * sphtheta, double * sphphi)
+void cart_to_sph(const double * x, const double r, double * sphtheta, double * sphphi)
 {
     double costheta,_sphtheta,_sphphi;
     costheta = x[2]/r;
@@ -390,14 +453,19 @@ void matmul2(double a[3][3], double b[3][3], double c[3][3])
         _sphphi = 0.0;
     } else {
         _sphtheta = table_acos(costheta);
-        _sphphi = table_atan2(x[1],x[0]);
+        if (fabs(x[0])>TINY) {
+        	_sphphi = table_atan2(x[1],x[0]);
+	} else {
+		if (x[1]<0) _sphphi=3*M_PI/2;
+		if (x[1]>0) _sphphi=M_PI/2;
+	}
     }
     //not necessary, table_atan2 designed for [0,2pi] range
     //if (_sphphi<0) _sphphi +=TWO_PI;
     //if (_sphphi>=TWO_PI) _sphphi -=TWO_PI;
     *sphtheta=_sphtheta;
     *sphphi=_sphphi;
-}*/
+}
 
 void sph_to_cart(double r, double sphtheta, double sphphi, double * x)
 {
@@ -442,7 +510,7 @@ void create_spherical_diffusion_kernel(const int tablesize, const int lmax, cons
         }
 	if (values[i]<=-1e-6) {
 	    printf("error: %d %.4f\n",i,values[i]);
-	    exit(1);
+	    die();
 	}
 	if (values[i]<0) values[i]=0; //for small values only
     }
@@ -481,7 +549,7 @@ void create_so3_diffusion_kernel(const int tablesize, const int jmax, const doub
         }
         if (values[i]<=-0.01) {
             printf("error: %d %.4f\n",i,values[i]);
-            exit(1);
+            die();
 	}
 	if (values[i]<0) values[i]=0; //for small values only
     }
@@ -624,38 +692,10 @@ void rmsd_fit(int natom, double * weight, double * coords1, double * coords2, do
         aux+=weight[iatom]*coords2[3*iatom+k]*coords2[3*iatom+k];
     }
     aux/=totalweight;
-    //Convert to matrix F, eq. 10 same paper.
-    f[0][0]=r[0][0]+r[1][1]+r[2][2];
-    f[0][1]=r[1][2]-r[2][1];
-    f[0][2]=r[2][0]-r[0][2];
-    f[0][3]=r[0][1]-r[1][0];
-    f[1][1]=r[0][0]-r[1][1]-r[2][2];
-    f[1][2]=r[0][1]+r[1][0];
-    f[1][3]=r[0][2]+r[2][0];
-    f[2][2]=-r[0][0]+r[1][1]-r[2][2];
-    f[2][3]=r[1][2]+r[2][1];
-    f[3][3]=-r[0][0]-r[1][1]+r[2][2];
-    //The matrix is symmetric.
-    f[1][0]=f[0][1];
-    f[2][0]=f[0][2];
-    f[3][0]=f[0][3];
-    f[2][1]=f[1][2];
-    f[3][1]=f[1][3];
-    f[3][2]=f[2][3];
-    //Calculate the eigenvalues with Jacobi's algorithm.
-    jacobi(4,&f[0][0],&qq[0][0]);
-    //Find the maximum eigenvalue and which one it is.
-    ev=-1.0e20;
-    for (k=0; k<4; k++) if (f[k][k]>ev) {
-        ev=f[k][k];
-        iev=k;
-    }
-    //The eigenvectors are stored as columns of qq. (Check this.)
-    //The quaternion is the eigenvector corresponding to the largest eigenvalue.
-    for (k=0; k<4; k++) q[k]=qq[k][iev];
-    normalize_quat(q); //Just to make sure.  Among other things ensures positive real part of quaternion.
-    conjugate_quat(q,orient);//For some reason we need this.  It probably compensates for having swapped something earlier.
-    //calculation of best fit RMSD.
+    matrix_to_quat(r,&orient[0],&ev);
+    normalize_quat(orient); //Just to make sure.  Among other things ensures positive real part of quaternion.
+    //normalize_quat(q);
+    //conjugate_quat(q,orient);//For some reason we need this.  It probably compensates for having swapped something earlier.
     *rmsd=sqrt(fabs(aux-2*ev));
     //Restore original coordinates.
     for (iatom=0; iatom<natom; iatom++)
@@ -665,7 +705,7 @@ void rmsd_fit(int natom, double * weight, double * coords1, double * coords2, do
         }
     //The center of coords2 is given by (r2-r1) - R(orient) * (r1), where r1 and r2 are the centers of coords1 and coords2.
     rotate_vector_by_quat(orient,c1center,c1center2);
-    for (k=0; k<3; k++) center[k]=(c2center[k]-c1center[k])-c1center2[k];
+    for (k=0; k<3; k++) center[k]=c2center[k]-c1center2[k];
 }
 
 //Constructs coordinates for atom "l" using atoms i, j, k, and the bond length (k-l), angle (j-k-l), and dihedral (i-j-k-l)

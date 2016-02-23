@@ -9,6 +9,8 @@
 //#include "tables.h"
 #include "ffield.h"
 #include "topology.h"
+#include "go_model.h"
+#include "util.h"
 //#include "fragments.h"
 //#include "covalent_tables.h"
 //#include "nblist.h"
@@ -33,7 +35,10 @@ private:
     bool pbc, interp, enwrite, rdie;
     double eps, cutoff, cutoff2, boxsize, halfboxsize, rmargin, tables_lambda;
     char forcefieldfname[255],deffname[255];
+    subset aaregion_res, aaregion_atoms;
     forcefield * ffield;
+    go_model_info * go_model;
+    go_model_params go_params;
     long int entablecount, enexactcount, enevalcount;
     FILE * energy_output;
     FILE * pairs_output;

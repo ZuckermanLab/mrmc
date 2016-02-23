@@ -1,11 +1,13 @@
 #ifndef TOPOLOGY_H_INCLUDED
 #define TOPOLOGY_H_INCLUDED
 
+#include <vector>
 //#include "fragments.h"
 //#include "solvation.h"
 #include "ffield.h"
 #include "topology.h"
-#include <vector>
+#include "util.h"
+
 
 #define MAX_FRAGMENTS_PER_RESIDUE 4
 #define MAX_SEGMENTS              10
@@ -114,9 +116,9 @@ struct topology {
     int find_atom(char chain, int res, const char * aname);
     //int is_bonded(int ifrag, int jfrag);
     //void addseg(int nsegres, char * seq);
-    void print_detailed_info(void);
+    void print_detailed_info(subset aaregion_res);
     void print_summary_info(void);
-    void insert_residue(const char * res);
+    void insert_residue(const char * res, subset aaregion_res);
     void link_fragments(void);
     void create_angle_dihedral_lists(bool using_cov_tables);
     void create_improper_dihedral_lists(bool using_cov_tables, forcefield * ffield);
@@ -126,7 +128,7 @@ struct topology {
     bool term_in_covalent_tables(int iatom, int jatom, int katom);
     bool term_in_covalent_tables(int iatom, int jatom, int katom, int latom);*/
     //void create_nb_atom_exact_list(int exact, int nb_list_per_frag, int * nb_list_count, int * nonbond_list, std::vector<atom_nb_entry> * atom_nb_list);
-    void add_segment(char chain, const char * sequence);
+    void add_segment(char chain, const char * sequence, subset aaregion_res);
     void assemble_fragments(double * orig_coords, double * center, double * orient, double * new_coords);
     void fit_all_fragments(double * orig_coords, double * center, double * orient, double * new_coords, double * rmsds);
     //void load_tables(const char * fmt, const char * fragfmt, table * * tables);

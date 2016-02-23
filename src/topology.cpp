@@ -6,7 +6,7 @@
 #include "rotations.h"
 #include "util.h"
 
-#ifdef FRAGMENTS
+/*
 int topology::frag_type_by_name(const char * name)
 {
     int itype;
@@ -30,7 +30,7 @@ int topology::frag_type_by_file(const char * fname)
     }
     return -1;
 }
-#endif
+*/
 
 int topology::resdefbyname(const char * name)
 {
@@ -90,7 +90,7 @@ topology::topology(const char * commandfile, forcefield * ffield)
         token=strtok(command,delim);
         if (token==NULL) continue; //blank line
         else if (*token=='#') continue; //comment
-#ifdef FRAGMENTS
+/*
         else if (strncmp("FRAG",token,4)==0) { //load a fragment
             //sscanf(token,"%*s %8s %255s\n",name,fname);
             token=strtok(NULL,delim);
@@ -102,7 +102,7 @@ topology::topology(const char * commandfile, forcefield * ffield)
             fragtypes[nfragtypes]=new fragmenttype(name,fname,ffield);
             nfragtypes++;
         }
-#endif
+*/
          else if (strncmp("RESI",token,4)==0) {
             resdef=(residuedef *)checkrealloc(resdef,nresdef+1,sizeof(residuedef));
             token=strtok(NULL,delim);
@@ -190,7 +190,7 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
                 }
             } else def->rottype[def->nbond]=RT_NOT_ROTATABLE;
             def->nbond++;
-#ifdef FRAGMENTS
+/*
            //Read fragment to residue defintiion.
             token=strtok(NULL,delim);
             itype=frag_type_by_name(token);
@@ -237,7 +237,7 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
                 die();
             }
             def->nfrag++;
-#else
+*/
         } else if (strncmp("FRAG",token,4)==0) { //so that we can ignore fragment definitions
             for (;;) {
                 if (feof(f)) {
@@ -247,7 +247,7 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
                 fgets(command,sizeof(command),f);
                 if (strstr(command,"END")!=NULL) break;
             }
-#endif
+
         } else {
             printf("Unrecognized command in definitions file: %s\n",token);
             die();
@@ -261,23 +261,23 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
 }
 
 
-void topology::print_detailed_info(void)
+void topology::print_detailed_info(subset aaregion_res)
 {
     int iatom,iactualatom,ibond,jatom,ifrag,jfrag,ires,itype;
     //Residue info:
-    printf("residue number, segment, res. type (res. name), branch atom number, start, end\n");
+    printf("residue number, segment, res. type (res. name), branch atom number, start, end, in AA region?\n");
     for (ires=0; ires<nres; ires++) {
-        printf("%d, %d, %d (%.4s), %d, %d, %d\n",ires,resinfo[ires].whichseg,resinfo[ires].restype,
-        resdef[resinfo[ires].restype].name,resinfo[ires].branchatom, resinfo[ires].atomstart,resinfo[ires].atomend);
+        printf("%d, %d, %d (%.4s), %d, %d, %d, %c\n",ires,resinfo[ires].whichseg,resinfo[ires].restype,
+        resdef[resinfo[ires].restype].name,resinfo[ires].branchatom, resinfo[ires].atomstart,resinfo[ires].atomend, yesno(aaregion_res[ires]));
         for (ibond=0; ibond<resinfo[ires].nbbrot; ibond++) printf("Backbone bond %d-%d is rotatable.\n",resinfo[ires].ibbrot[ibond],resinfo[ires].jbbrot[ibond]);
 
         printf("\n");
     }
     printf("\n");
-    for (ibond=0; ibond<nscrot; ibond++) printf("Backbone bond %d-%d is rotatable.\n",iscrot[ibond],jscrot[ibond]);
+    for (ibond=0; ibond<nscrot; ibond++) printf("Side chain bond %d-%d is rotatable.\n",iscrot[ibond],jscrot[ibond]);
     printf("\n");
     //Fragment info:
-#ifdef FRAGMENTS
+/*
     for (ifrag=0; ifrag<nfrag; ifrag++) {
         printf("Fragment %d: \n",ifrag);
         itype=frags[ifrag].type;
@@ -293,9 +293,9 @@ void topology::print_detailed_info(void)
         }
         printf("\n");
     }
-#endif
+*/
     //Atom info
-    printf("index, res. number, atom name, type, class,  list of bonded atoms\n");
+    printf("index, res. number, atom name, type, class, list of bonded atoms\n");
     for (iatom=0; iatom<natom; iatom++) {
         printf("%d, %d, %s, %d, %d, ",iatom,atoms[iatom].resNum,atoms[iatom].name,atoms[iatom].type,atoms[iatom].classx);
         for (ibond=0; ibond<atoms[iatom].numOfBondedAtoms; ibond++) printf("%d ",atoms[iatom].bondedAtomList[ibond]);
@@ -306,18 +306,17 @@ void topology::print_detailed_info(void)
 
 void topology::print_summary_info(void)
 {
-    printf("Number of segments:                   %d\n",nseg);
-    printf("Number of residues:                   %d\n",nres);
-    printf("Number of atoms:                      %d\n",natom);
-#ifdef FRAGMENTS
-    printf("Number of fragments:                  %d\n",nfrag);
-    printf("Average atoms/fragment:               %.2f\n",((double) natom)/((double) nfrag));
-#endif
+    //int ires, naares, iatom, naa_atom;
+    //for (ires=0; ires<nres; ires++) if (aaregion_res[ires]) naares++;
+    printf("Number of segments:                     %d\n",nseg);
+    printf("Number of residues:                     %d\n",nres);
+    printf("Number of atoms:                        %d\n",natom);
+
     printf("Number of side chain rotatable bonds: %d\n",nscrot);
     printf("Total system charge:                  %.2f\n",qsystem);
 }
 
-void topology::insert_residue(const char * res)
+void topology::insert_residue(const char * res, subset aaregion_res)
 {
     int nnewfrag,nnewatom,nnewscrot,ifrag,restype,iatom,jatom,ibond,itype,ires,iactualatom,nfragbonded;
     //int fragbonded[6]; //max bonds per atom, should be a constant
@@ -349,9 +348,13 @@ void topology::insert_residue(const char * res)
         atoms[natom].fragment=-1;
         atoms[natom].fragatom=-1;
         atoms[natom].type=resdef[restype].atomtypes[iatom];//The atom class will be identified by forcefield::find_parameters.
+        atoms[natom].is_in_aa_region=(aaregion_res[nres]);//this may be redundant but is convenient
+        atoms[natom].is_backbone=((strncmp(atoms[natom].name,"N",sizeof(atoms[natom].name))==0) ||
+                                    (strncmp(atoms[natom].name,"CA",sizeof(atoms[natom].name))==0) ||
+                                    (strncmp(atoms[natom].name,"C",sizeof(atoms[natom].name))==0));
         natom++;
     }
-#ifdef FRAGMENTS
+/*
     //Insert all fragments.
     //How many new fragments will there be?  Insert only fragments that are unique to this residue or that overlap with the previous.
     //We'll get to fragments that overlap with next on the next go around.
@@ -408,7 +411,7 @@ void topology::insert_residue(const char * res)
         }
         nfrag++; //finished with this fragment
     }
-#endif
+*/
     //Insert bonding info from the residue definition.
     for (ibond=0; ibond<resdef[restype].nbond; ibond++) {
         //Find the two atoms which are bonded. "joffset" must be less than 0, otherwise we havent' added
@@ -429,16 +432,19 @@ void topology::insert_residue(const char * res)
                     resdef[restype].jname[ibond],resdef[restype].iname[ibond],resdef[resinfo[ires].restype].name,ires,resdef[restype].name,nres);
             die();
         }
-        atoms[iatom].bondedAtomList[atoms[iatom].numOfBondedAtoms]=jatom;
-        atoms[iatom].numOfBondedAtoms++;
-        atoms[jatom].bondedAtomList[atoms[jatom].numOfBondedAtoms]=iatom;
-        atoms[jatom].numOfBondedAtoms++;
+        //Only add backbone bonds if not in the all-atom region.
+        if (aaregion_res[nres] || (atoms[iatom].is_backbone && atoms[jatom].is_backbone)) {
+            atoms[iatom].bondedAtomList[atoms[iatom].numOfBondedAtoms]=jatom;
+            atoms[iatom].numOfBondedAtoms++;
+            atoms[jatom].bondedAtomList[atoms[jatom].numOfBondedAtoms]=iatom;
+            atoms[jatom].numOfBondedAtoms++;
+        }
         //If the bond is rotatable, include it in appropriate list.  This information is used to generate Monte Carlo moves.
         if (resdef[restype].rottype[ibond]==RT_BACKBONE) {
             resinfo[nres].ibbrot[resinfo[nres].nbbrot]=iatom;
             resinfo[nres].jbbrot[resinfo[nres].nbbrot]=jatom;
             resinfo[nres].nbbrot++;
-        } else if (resdef[restype].rottype[ibond]==RT_SIDECHAIN) {
+        } else if (aaregion_res[nres] && resdef[restype].rottype[ibond]==RT_SIDECHAIN) { //only add side chains if in the all-atom region
             /*resinfo[nres].iscrot[resinfo[nres].nscrot]=iatom;
             resinfo[nres].jscrot[resinfo[nres].nscrot]=jatom;*/
             iscrot=(int *)checkrealloc(iscrot,nscrot+1,sizeof(int));
@@ -447,15 +453,7 @@ void topology::insert_residue(const char * res)
             jscrot[nscrot]=jatom;
             nscrot++;
         }
-        if (strcasecmp(resdef[restype].name,"PRO")==0) {
-            iatom=find_atom(nres,"CB");
-            jatom=find_atom(nres,"CD");
-            iscrot=(int *)checkrealloc(iscrot,nscrot+1,sizeof(int));
-            jscrot=(int *)checkrealloc(jscrot,nscrot+1,sizeof(int));
-            iscrot[nscrot]=iatom;
-            jscrot[nscrot]=jatom;
-            nscrot++;
-        }
+
         /*if (resdef[restype].rotatable[ibond]) {
             resinfo[nres].irotatable[resinfo[nres].nrotatable]=iatom;
             resinfo[nres].jrotatable[resinfo[nres].nrotatable]=jatom;
@@ -464,6 +462,17 @@ void topology::insert_residue(const char * res)
             resinfo[nres].nrotatable++;
             if (resinfo[nres].isscrotatable[resinfo[nres].nrotatable]) resinfo[nres].nscrotatable++; else resinfo[nres].nbbrotatable++;
         }*/
+    }
+    //this was a bug in the tablemc-proteins code as well -- this condition was inside the "ibond" loop,
+    //so that the CB-CD bond was added once for every bond in the pro residue, not just once as it should have been.
+    if (aaregion_res[nres] && strcasecmp(resdef[restype].name,"PRO")==0) {
+        iatom=find_atom(nres,"CB");
+        jatom=find_atom(nres,"CD");
+        iscrot=(int *)checkrealloc(iscrot,nscrot+1,sizeof(int));
+        jscrot=(int *)checkrealloc(jscrot,nscrot+1,sizeof(int));
+        iscrot[nscrot]=iatom;
+        jscrot[nscrot]=jatom;
+        nscrot++;
     }
     resinfo[nres].branchatom=resinfo[nres].atomstart+resdef[restype].branchatom;
     segend[nseg]=nres;
@@ -490,7 +499,7 @@ int topology::find_atom(char chain, int res, const char * aname)
 
 }
 
-#ifdef FRAGMENTS
+/*
 void topology::link_fragments(void)
 {
     int iatom,jatom,ifrag,jfrag,ibond,imainchain,isidechain,branchatom;
@@ -545,9 +554,9 @@ int topology::is_bonded(int ifrag, int jfrag)
     return result;
 
 }
-#endif
+*/
 
-void topology::add_segment(char chain, const char * sequence)
+void topology::add_segment(char chain, const char * sequence, subset aaregion_res)
 {
     char * token;
     char * buf;
@@ -565,7 +574,7 @@ void topology::add_segment(char chain, const char * sequence)
     buf[strlen(sequence)]='\0';
     token=strtok(buf,delim);
     while (token!=NULL) {
-        insert_residue(token);
+        insert_residue(token,aaregion_res);
         token=strtok(NULL,delim);
     }
     segend[nseg]=nres-1;
@@ -573,7 +582,7 @@ void topology::add_segment(char chain, const char * sequence)
     free(buf);
 }
 
-#ifdef FRAGMENTS
+/*
 //calls fit_all_fragments, prints diagnostic messages
 void topology::assemble_fragments(double * orig_coords, double * center, double * orient, double * new_coords)
 {
@@ -711,7 +720,7 @@ bool topology::term_in_covalent_tables(int iatom, int jatom, int katom, int lato
     die();
     return false; //can't happen
 }
-#endif //FRAGMENTS
+*/
 
 //Fills the angleAtomList and bonded14AtomList fields in the atoms.  Also looks for fragments that are 1-3 or 1-4 and sets the closefragments flags
 void topology::create_angle_dihedral_lists(bool using_cov_tables)
@@ -732,23 +741,23 @@ void topology::create_angle_dihedral_lists(bool using_cov_tables)
     for(iatom=0;iatom<natom;iatom++){
         for(j=0;j<atoms[iatom].numOfBondedAtoms;j++){
             jatom=atoms[iatom].bondedAtomList[j];
-#ifdef FRAGMENTS
+/*
       ifrag=atoms[iatom].fragment;
       jfrag=atoms[jatom].fragment;
       closefragments[ifrag*nfrag+jfrag]=true;
       closefragments[jfrag*nfrag+ifrag]=true;
-#endif
+*/
             for(k=0;k<atoms[jatom].numOfBondedAtoms;k++){
                 katom=atoms[jatom].bondedAtomList[k];
                 if(katom!=iatom){
-#ifdef FRAGMENTS
+/*
 	    if (using_cov_tables && term_in_covalent_tables(iatom,jatom,katom)){
 #ifdef DEBUG_NON_TABULATED
             printf("Skipping angle term involving atoms %d %d %d\n",iatom,jatom,katom);
 #endif
             continue;
 	    }
-#endif //FRAGMENTS
+*/
         //regular angles
                     num = atoms[iatom].numOfAngles;
                     atoms[iatom].angleAtomList[3*num]   = iatom;
@@ -811,26 +820,26 @@ void topology::create_angle_dihedral_lists(bool using_cov_tables)
                                 }
                             }
 	    if (flag2==0) continue;*/
-#ifdef FRAGMENTS
+/*
             if (using_cov_tables && term_in_covalent_tables(iatom,jatom,katom,matom)){
 #ifdef DEBUG_NON_TABULATED
                 printf("Skipping dihedral term involving atoms %d %d %d %d\n",iatom,jatom,katom,matom);
 #endif
                 continue;
             }
-#endif
+*/
             num = atoms[iatom].numOfBonded14Atoms;
             atoms[iatom].bonded14AtomList[4*num]   = iatom;
             atoms[iatom].bonded14AtomList[4*num+1] = jatom;
             atoms[iatom].bonded14AtomList[4*num+2] = katom;
             atoms[iatom].bonded14AtomList[4*num+3] = matom;
             atoms[iatom].numOfBonded14Atoms++;
-#ifdef FRAGMENTS
+/*
             ifrag=atoms[iatom].fragment;
             mfrag=atoms[matom].fragment;
             closefragments[ifrag*nfrag+mfrag]=true;
             closefragments[mfrag*nfrag+ifrag]=true;
-#endif
+*/
 	    }
 	  }
 	}
@@ -953,9 +962,8 @@ void topology::create_non_tab_list(bool using_cov_tables, std::vector<atom_nb_en
     bool is12, is13, is14;
     atom_nb_entry newentry;
     atom_nb_list->clear();
-#ifdef FRAGMENTS
     //For every pair of fragments, including interactions between atoms in the same fragment.
-    for (ifrag=0; ifrag<nfrag; ifrag++)
+    /*for (ifrag=0; ifrag<nfrag; ifrag++)
         for (jfrag=ifrag; jfrag<nfrag; jfrag++) {
             //if they are not close and we are not doing an exact simulation, they will be calculated through the tables.
             if (!(closefragments[ifrag*nfrag+jfrag])) continue;
@@ -969,13 +977,12 @@ void topology::create_non_tab_list(bool using_cov_tables, std::vector<atom_nb_en
                         temp=iatom;
                         iatom=jatom;
                         jatom=temp;
-                    }
-#else //FRAGMENTS
+                    }*/
+
     for (iatom=0; iatom<natom; iatom++)
         for (jatom=iatom+1; jatom<natom; jatom++) {
-#endif
-                    //guard against double counting atom pairs from same fragment
-
+                    //include in list only if both atoms don't belong to the CG region
+                    if (!atoms[iatom].is_in_aa_region && !atoms[jatom].is_in_aa_region) continue;
                     //iatom<jatom and check to see if 1-2, 1-3, or 1-4.
                     is12=false;
                     for (k=0; k<atoms[iatom].numOfBondedAtoms; k++)
@@ -1023,11 +1030,11 @@ void topology::create_non_tab_list(bool using_cov_tables, std::vector<atom_nb_en
 topology::~topology()
 {
     int itype;
-#ifdef FRAGMENTS
+/*
     for (itype=0; itype<nfragtypes; itype++) delete fragtypes[itype];
     free(fragtypes);
     free(frags);
-#endif
+*/
     free(atoms);
     free(resdef);
     free(resinfo);

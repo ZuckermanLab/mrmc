@@ -147,6 +147,68 @@ char * read_multiline(FILE * input)
     return seq;
 }
 
+//used to pre-count the number of residues in order to instantiate the all-atom region early
+//I got this from stackoverflow.com
+int count_words(char * str) {
+    if (str==NULL) return 0;
+    bool inSpaces = true;
+   int numWords = 0;
+   //this is potentially unsafe, could run off the end of the string
+   while (*str != '\0')
+   {
+      if (std::isspace(*str))
+      {
+         inSpaces = true;
+      }
+      else if (inSpaces)
+      {
+         numWords++;
+         inSpaces = false;
+      }
+
+      ++str;
+   }
+
+   return numWords;
+}
+//Parse a string containing something of the form 1,3,5,7-9 and set the corresponding flags.
+//Integers mentioned go from 1 to count. flags is zero-based, so 1 corresponds to flags[0], etc.
+void subset::parse_int_list(char * str)
+{
+    char * token;
+    char * tokenend;
+    char * hyphen;
+    //here "n" is the number of possible items in the subset
+    int start,end,i,m;
+    //for (i=0; i<count; i++) flags[i]=false;
+    init(n); //zero out any previous set
+    token=str;
+    while (true) {
+        tokenend=strchr(token,',');
+        hyphen=strchr(token,'-');
+        if ((hyphen!=NULL) && ((tokenend==NULL) || (hyphen<tokenend))) { //this token is of the form m-n
+            m=sscanf(token,"%d-%d",&start,&end);
+            if ((m<2) || (start<1) || (start>n) || (end<1) || (end>n)) {
+                printf("Invalid selection.\n");
+                exit(1);
+            }
+            start--; //convert to zero based
+            end--;
+            for (i=start; i<=end; i++) (*this)+=i;
+        } else { //it's a single integer
+            m=sscanf(token,"%d",&i);
+            if ((m<1) || (i<1) || (i>n)) {
+                printf("Invalid selection.\n");
+                exit(1);
+            }
+            i--; //zero-based
+            (*this)+=i;
+        }
+        if (tokenend==NULL) break; //no more tokens
+        token=tokenend+1; //advance past the comma
+    }
+}
+
 //This code from http://gnuradio.org/redmine/projects/gnuradio/repository/revisions/1cb52da49230c64c3719b4ab944ba1cf5a9abb92/entry/gr-digital/lib/digital_crc32.cc
 
 

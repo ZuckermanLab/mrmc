@@ -235,6 +235,10 @@ void simulation::total_energy( double * coords, double * energies, double * etot
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
     //if (en_by_table!=NULL) for (itype=0; itype<top->nfragtypes*top->nfragtypes; itype++) en_by_table[itype]=0.0;
     ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,non_tab_list.size(),&non_tab_list[0],coords,energies);
+#ifdef TIMERS
+    switch_timer(TIMER_GO);
+#endif
+    energies[EN_GO]=go_model->energy(pbc,halfboxsize,boxsize,&go_params,top->nres,top->resinfo,aaregion_res,top->natom,coords);
 /*#ifdef TIMERS
     switch_timer(TIMER_INT_OTHER);
 #endif
@@ -342,12 +346,12 @@ void simulation::total_energy( double * coords, double * energies, double * etot
 
 void simulation::print_energies(FILE * output, int hdr, const char * title, long int istep, double * energies, double etot)
 {
-    const char * hdrfmt = "%15s %15s %15s %15s %15s %15s %15s %15s %15s %15s %15s\n";
-    const char * enfmt = "%15s %15ld %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f\n";
+    const char * hdrfmt = "%15s %15s %15s %15s %15s %15s %15s %15s %15s %15s\n";
+    const char * enfmt = "%15s %15ld %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f %15.6f\n";
     if (hdr) {
-        fprintf(output,hdrfmt,title,"Step","Total","Interaction","Cov. intxn","Bonds","Angles","Dihedrals","Impropers","Non-tab VDW","Non-tab Elec");
+        fprintf(output,hdrfmt,title,"Step","Total","Bonds","Angles","Dihedrals","Impropers","Non-tab VDW","Non-tab Elec","Go");
     }
-    fprintf(output,enfmt,title,istep,etot,energies[EN_INTERACTION],energies[EN_COVALENT_TABLE],energies[EN_BOND],energies[EN_ANGLE],energies[EN_DIHEDRAL],energies[EN_IMPROPER],energies[EN_VDW_EXACT],energies[EN_ELEC_EXACT]);
+    fprintf(output,enfmt,title,istep,etot,energies[EN_BOND],energies[EN_ANGLE],energies[EN_DIHEDRAL],energies[EN_IMPROPER],energies[EN_VDW_EXACT],energies[EN_ELEC_EXACT],energies[EN_GO]);
     fflush(output);
 }
 

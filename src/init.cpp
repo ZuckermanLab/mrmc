@@ -8,6 +8,7 @@
 #include <math.h>
 #include "rotations.h"
 #include "ffield.h"
+#include "go_model.h"
 #include "util.h"
 #include "topology.h"
 //#include "fragments.h"
@@ -33,7 +34,7 @@ simulation::simulation(const char * command, const char * fname)
     char * seq;
     char * pch;
     bool start,restart,do_mc,do_energy;
-    int itype,ifrag,i,jtype,move;
+    int itype,ifrag,i,jtype,move,nres;
     double energies[EN_TERMS],etot;
 #if defined(PARALLEL) || defined(EXCHANGE)
     mynod=_mynod;
@@ -78,16 +79,21 @@ simulation::simulation(const char * command, const char * fname)
     //provide support for multiple lines
     seq=read_multiline(f);
     printf("Sequence: %s\n",seq);
-    top->add_segment(' ',seq); //temporary
+    //we need to precount the number of residues so we can set up the all-atom region for residues
+    nres=count_words(seq);
+    aaregion_res.init(nres);
+    fgets(buffer,sizeof(buffer),f);
+    aaregion_res.parse_int_list(buffer);
+    top->add_segment(' ',seq,aaregion_res); //temporary
     free(seq);
     //top->link_fragments();
-
     top->create_angle_dihedral_lists(false);
     top->create_non_tab_list(false,&non_tab_list);
     ffield->find_parameters(top->natom,top->atoms);
     top->create_improper_dihedral_lists(false,ffield);
+    aaregion_res.print("All atom region residues ");
 #ifdef DEBUG_NON_TABULATED
-    top->print_detailed_info();
+    top->print_detailed_info(aaregion_res);
 #else
     top->print_summary_info();
 #endif
@@ -140,8 +146,7 @@ simulation::simulation(const char * command, const char * fname)
     } else {
         printf("Must specify start or restart in input file.\n");
         die();
-    }
-        //for (ifrag=0; ifrag<top->nfrag; ifrag++) top->copy_frag(ifrag,oldcenter,oldorient,oldcoords,newcenter,neworient,newcoords);
+    }        //for (ifrag=0; ifrag<top->nfrag; ifrag++) top->copy_frag(ifrag,oldcenter,oldorient,oldcoords,newcenter,neworient,newcoords);
         //read the rest of MC related parameters
     if (do_mc) {
     	fgets(buffer,sizeof(buffer),f);
@@ -164,6 +169,13 @@ simulation::simulation(const char * command, const char * fname)
     } //end of if (do_mc)
     fgets(buffer,sizeof(buffer),f);
     sscanf(buffer,"%d %lg   %lg %lg %lg %d\n",&pbc,&boxsize,&cutoff,&listcutoff,&eps,&rdie);
+    //Create the go model! (Must do this after coordinates are read.)
+    fgets(buffer,sizeof(buffer),f);
+    read_go_params(buffer,&go_params);
+    print_go_params(go_params);
+    go_model = new go_model_info();
+    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,aaregion_res);
+
     //Create nonbond list object.  Set listcutoff=cutoff or less to disable the nb list.
     /*use_nb_list=(listcutoff>cutoff);
     if (use_nb_list) frag_nblist=new fragment_nblist(top->nfrag,listcutoff);*/
@@ -279,6 +291,7 @@ simulation::~simulation()
     free(neworient);*/
     //if (frag_nblist!=NULL) delete frag_nblist;
     delete ffield;
+    delete go_model;
     delete top;
 }
 

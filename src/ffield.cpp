@@ -2,6 +2,7 @@
 #include "ffield.h"
 #include "util.h"
 #include "rotations.h"
+//#include "solvation.h"
 
 //Outside this limit on dot product, dihedrals will be 1
 #define LIMIT    0.999999
@@ -90,7 +91,7 @@ forcefield::forcefield(char * fname)
       //there may be some issues of symmetry. I will just keep the energy the same for now as in tinker but tinker may be wrong!
       //printf("%d %d %d %d  %f\n",impropParams[countImprops].atomClass[0],impropParams[countImprops].atomClass[1],impropParams[countImprops].atomClass[2],impropParams[countImprops].atomClass[3],impropParams[countImprops].V);
 #ifdef AMBER
-      //See above comment. It seems that if two of the atoms have the same class tinker includes a factor of 1/2. 
+      //See above comment. It seems that if two of the atoms have the same class tinker includes a factor of 1/2.
       if ((j==m) || (k==m) || (j==k)) impropParams[countImprops].K *= 0.5;
 #endif
       countImprops++;
@@ -374,6 +375,38 @@ void forcefield::nonbond_energy( int rdie, int type1,  int type2, int is14, doub
         *evdw=MLJ(vdwAFact[class1][class2],vdwBFact[class1][class2],r6);
     }
 }
+
+/*void forcefield::nonbond_energy_gb(int type1, int type2, bool is14, double r2, double a1a2, double * evdw, double * eelec, double * egb)
+{
+    int class1,class2;
+    double q1,q2,r6,x,fGB,aux;
+    r6=r2*r2*r2;
+    class1=atomTypeLookUp[type1].classx;
+    class2=atomTypeLookUp[type2].classx;
+    q1=chargeParams[type1];
+    q2=chargeParams[type2];
+    //printf("nonbond_energy_gb1: r2=%.5f a1a2=%.5f\n",r2,a1a2);
+    *eelec=MCE(q1,q2,sqrt(r2));
+    if (is14) {
+        *evdw=MLJ(vdwAFact14[class1][class2],vdwBFact14[class1][class2],r6);
+        *eelec*=ELEC14_SCALE;
+    } else {
+        *evdw=MLJ(vdwAFact[class1][class2],vdwBFact[class1][class2],r6);
+    }
+    //printf("nonbond_energy_gb2: r2=%.5f a1a2=%.5f\n",r2,a1a2);
+    //fflush(stdout);
+    if (a1a2>0) {
+        x=r2/a1a2;
+        //printf("nonbond_energy_gb2.5: a1a2=%.5f\n",a1a2);
+        //fflush(stdout);
+        aux=1/sqrt(a1a2);
+        //printf("nonbond_energy_gb3: x=%.5f aux=%.5f\n",x,aux);
+        //fflush(stdout);
+        fGB=splintGB(x)*aux;
+        *egb=-q1*q2*fGB;
+    } else *egb=0;
+}*/
+
 
 //This is only for pairs of fragments that do not share a 1-4 bond.
 /*double forcefield::exact_interaction_energy(int pbc, double halfboxsize, double boxsize, double eps,  int rdie, int natom1, int * types1, double * coords1, int natom2, int * types2, double * coords2)
@@ -798,13 +831,13 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
         bc[0] = coords[3*b]   - coords[3*c];
         bc[1] = coords[3*b+1] - coords[3*c+1];
         bc[2] = coords[3*b+2] - coords[3*c+2];
-        ac[0] = coords[3*a]   - coords[3*c];                                                                                                                                                            
-        ac[1] = coords[3*a+1] - coords[3*c+1];                                                                                                                                                          
-        ac[2] = coords[3*a+2] - coords[3*c+2];     	
+        ac[0] = coords[3*a]   - coords[3*c];
+        ac[1] = coords[3*a+1] - coords[3*c+1];
+        ac[2] = coords[3*a+2] - coords[3*c+2];
 	dihed = cos_dihedral(ac,cd,bc);
 #endif
         //dihed = M_PI-fabs(dihed);
-        
+
 
         type = atoms[iatom].impropParamType[j];
         K = impropParams[type].K;

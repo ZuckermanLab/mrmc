@@ -103,13 +103,13 @@ void topology::write_pdb_file(char * fname, double * coords)
         color=0.0;
         //color main-chain and side-chain fragments separately
 	if ((iatom>0) && (atoms[iatom].fragment!=atoms[iatom-1].fragment)) {
-            if (atoms[iatom].is_side_chain) {
+            if (!atoms[iatom].is_backbone) {
                 scfragcount++;
             } else {
                 mainfragcount++;
             }
         }
-        if (atoms[iatom].is_side_chain) {
+        if (!atoms[iatom].is_backbone) {
             color=(double) (scfragcount%2) +4.0;
         } else {
             color=(double) (mainfragcount%2);

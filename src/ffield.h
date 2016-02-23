@@ -51,15 +51,16 @@
 #define INTERP_6D      4
 
 /*energy term indices*/
-#define EN_INTERACTION    0
-#define EN_COVALENT_TABLE 1
-#define EN_BOND           2
-#define EN_ANGLE          3
-#define EN_DIHEDRAL       4
-#define EN_IMPROPER       5
-#define EN_VDW_EXACT      6
-#define EN_ELEC_EXACT     7
-#define EN_TERMS          8 //adjust this if more terms are added!
+//#define EN_INTERACTION    0
+//#define EN_COVALENT_TABLE 1
+#define EN_BOND           0
+#define EN_ANGLE          1
+#define EN_DIHEDRAL       2
+#define EN_IMPROPER       3
+#define EN_VDW_EXACT      4
+#define EN_ELEC_EXACT     5
+#define EN_GO             6
+#define EN_TERMS          7 //adjust this if more terms are added!
 
 
 typedef struct _atoms_ {
@@ -106,7 +107,12 @@ typedef struct _atoms_ {
   int fragatom; //which atom number within the fragment corresponds to this atom?
   double mass;
   double radius; //needed for solvation
-  int is_side_chain; //is this atom part of the side chain?
+  bool is_backbone; //is this atom part of the side chain?
+  bool is_in_aa_region; //is this atom in the all-atom region?
+  //for solvation: solvation radius and scale factor
+  double rsolv;
+  double fs;
+  double P0, P1, P2, P3, P4;
 }ATOMS;
 //ATOMS atoms[MAX_NUM_OF_ATOMS];
 
@@ -189,6 +195,10 @@ public:
     void non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
     void link_fragments(void);
     void find_parameters(int numOfAtoms, ATOMS * atoms);
+    //solvation stuff
+    void nonbond_energy_gb(int type1, int type2, bool is14, double r2, double a1a2, double * evdw, double * eelec, double * egb);
+    //void calculate_born_radii(gb_param_info * params, int natom, ATOMS * atoms, double * coords, double * reff, double * energies);
+    //double calculate_sasa(gb_param_info * params, int natom, ATOMS * atoms, int * ineighbor, double * coords);
     //void create_virtual_site_list(int natom, ATOMS * atoms, int * nsite, virtual_site * * sites);
 };
 
