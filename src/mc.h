@@ -24,8 +24,11 @@
 //For some reason the above include files are not prividing these declarations.
 //class table;
 //class fragmenttype;
+using std::vector;
 
 static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub"};
+
+
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
 class simulation {
 private:
@@ -39,7 +42,7 @@ private:
     forcefield * ffield;
     go_model_info * go_model;
     go_model_params go_params;
-    long int entablecount, enexactcount, enevalcount;
+    //long int entablecount, enexactcount, enevalcount;
     FILE * energy_output;
     FILE * pairs_output;
     char structfname[255],struct2fname[255],xyzfname[255],quatfname[255],restartfname[255];
@@ -57,7 +60,9 @@ private:
 
     long int nmcstep, nsave, nprint,ncheck,nprevstep; /*number of MC steps, frequency of saving conformations, frequency of printing*/
     double prob[NUM_MOVES+1],cumprob[NUM_MOVES+1],movesize[NUM_MOVES+1];
-
+    vector<mc_move> backbone_moves;
+    vector<mc_move> sidechain_moves;
+    vector<mc_move> backrub_moves;
     int startoption;
     topology * top;
     /*bool use_nb_list;
@@ -84,7 +89,7 @@ private:
     //std::vector<atom_nb_entry> nb_atom_list;
     //double evdw_internal, eelec_internal; //Total internal VDW and electrostatic energies over all the fragments.
     void recenter(void);
-    void mcmove(int * movetype, bool * moved, bool * movedatoms, double * center, double * orient, double * coords);
+    void mcmove(int * movetype, subset * movedatoms, double * coords);
     //void write_frame_xyz(FILE * output, long int istep, double * coords);
     //void write_frame_pdb(FILE * output, long int istep, double * coords);
     void write_pair_pdb(FILE * output, int ifrag, int jfrag, double * coords);
@@ -92,13 +97,13 @@ private:
     void write_frame_quat(FILE * output, long int istep, double * center, double * orient);
     void copy_frag(int ifrag, double * center1, double * orient1, double * coords1, double * center2, double * orient2, double * coords2);
     double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
-    void moved_energy(bool * moved, bool * movedatoms,double * coords, double * energies, double * etot);
+    void moved_energy(subset& movedatoms, double * coords, double * energies, double * etot);
     void total_energy(double * coords, double * energies, double * etot);
     void read_restart(char * fname);
     void write_restart(long int istep, char * fname);
     void create_nonbond_list(double * center);
     bool check_nb_list(bool * moved, double * center);
-    void rotate_fragments_by_axis(const bool * moved, const int atom1, const int atom2, const double angle, double * coords);
+    void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
     //i/o related stuff
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);

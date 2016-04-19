@@ -30,7 +30,7 @@ simulation::simulation(const char * command, const char * fname)
     double listcutoff;
     double ptot,mctemp,p,size;
     double total_table_size;
-    char buffer[255],word[255],tablefmt[255],covtablefmt[255],fragfmt[255],structf3name[255];
+    char buffer[255],word[255],tablefmt[255],covtablefmt[255],fragfmt[255],structf3name[255],psffname[255];
     char * seq;
     char * pch;
     bool start,restart,do_mc,do_energy;
@@ -120,6 +120,7 @@ simulation::simulation(const char * command, const char * fname)
         top->read_pdb_file(structfname,initcoords);
         //In place of rebuilding the structure from fragments, need to copy the coordinates from initcoords to oldcoords.
         for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
+        for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
         /*top->assemble_fragments(initcoords,oldcenter,oldorient,oldcoords);
         if (strlen(struct2fname)>0) {
             printf("Writing fitted structure to file %s.\n",struct2fname);
@@ -149,23 +150,7 @@ simulation::simulation(const char * command, const char * fname)
     }        //for (ifrag=0; ifrag<top->nfrag; ifrag++) top->copy_frag(ifrag,oldcenter,oldorient,oldcoords,newcenter,neworient,newcoords);
         //read the rest of MC related parameters
     if (do_mc) {
-    	fgets(buffer,sizeof(buffer),f);
-#ifdef EXCHANGE
-        sscanf(buffer,"%ld %ld %ld %ld %ld %d\n",&nmcstep,&nsave,&nprint,&ncheck,&seed, &enwrite);
-#endif
-    	sscanf(buffer,"%ld %ld %ld %ld %ld %d %lg\n",&nmcstep,&nsave,&nprint,&ncheck,&seed, &enwrite, &mctemp);
-    	if (!restart) { //If restarting, we do not reinitialize the random number generator; read_restart put back the state.
-    	   if (seed==0) {
-       	   	seed=time(NULL);
-#ifdef UNIX
-                seed^=getpid(); //To ensure uniqueness even if many are started at same time.
-#endif
-           	printf("Initialized seed based on time.  Seed used is %ld\n",seed);
-    	   } else {
-           	printf("Seed specified in file.  Seed used is %ld\n",seed);
-           }
-    	   init_genrand(seed);
-        }
+
     } //end of if (do_mc)
     fgets(buffer,sizeof(buffer),f);
     sscanf(buffer,"%d %lg   %lg %lg %lg %d\n",&pbc,&boxsize,&cutoff,&listcutoff,&eps,&rdie);
@@ -199,8 +184,26 @@ simulation::simulation(const char * command, const char * fname)
     printf("Dielectric constant:          %.2f\n",eps);
     //keyword, (relative) probability, and size
     if (do_mc) {
-    	for (i=1; i<=NUM_MOVES; i++) prob[i]=0.0;
-    	while (TRUE) {
+     	fgets(buffer,sizeof(buffer),f);
+#ifdef EXCHANGE
+        sscanf(buffer,"%ld %ld %ld %ld %ld %d\n",&nmcstep,&nsave,&nprint,&ncheck,&seed, &enwrite);
+#else
+    	sscanf(buffer,"%ld %ld %ld %ld %lg\n",&nmcstep,&nsave,&nprint,&seed,&mctemp);
+#endif
+    	if (!restart) { //If restarting, we do not reinitialize the random number generator; read_restart put back the state.
+    	   if (seed==0) {
+       	   	seed=time(NULL);
+#ifdef UNIX
+            seed^=getpid(); //To ensure uniqueness even if many are started at same time.
+#endif
+           	printf("Initialized seed based on time.  Seed used is %ld\n",seed);
+    	   } else {
+           	printf("Seed specified in file.  Seed used is %ld\n",seed);
+           }
+    	   init_genrand(seed);
+        }
+        for (i=1; i<=NUM_MOVES; i++) prob[i]=0.0;
+    	for(;;) {
             fgets(buffer,sizeof(buffer),f);
             sscanf(buffer,"%s %lg %lg\n",word,&p,&size);
             move=-1;
@@ -217,6 +220,14 @@ simulation::simulation(const char * command, const char * fname)
        for(i=2;i<=NUM_MOVES;i++)cumprob[i]=cumprob[i-1]+prob[i];
        for(i=1;i<=NUM_MOVES;i++)printf("%.10s moves:  Maximum size %.2f degrees  Fraction %.2f%%\n",
           mc_move_names[i],movesize[i]*RAD_TO_DEG,prob[i]*100.0);
+        top->generate_backbone_moves(&backbone_moves);
+        top->generate_sidechain_moves(&sidechain_moves);
+        top->generate_backrub_moves(&backrub_moves);
+       if ((prob[MOVE_SIDECHAIN]>0) && (sidechain_moves.size()<=0)) {
+           //this usually 
+           printf("You cannot have sidechain moves with an empty AA region.\n");
+           die();
+       }       
        printf("Number of monte carlo steps: %ld\n",nmcstep);
        printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
 #ifdef EXCHANGE
@@ -228,9 +239,11 @@ simulation::simulation(const char * command, const char * fname)
        beta=1/(KBOLTZ*mctemp);
 
        fgets(buffer,sizeof(buffer),f);
-       sscanf(buffer,"%s %s %s\n",xyzfname,quatfname,restartfname);
+       sscanf(buffer,"%s %s %s\n",psffname,xyzfname,restartfname);
+       trim_string(psffname);
+       top->write_psf_file(psffname,ffield);
        trim_string(xyzfname);
-       trim_string(quatfname);
+       //trim_string(quatfname);
        trim_string(restartfname);
     } //also if (do_mc)
     //And now... load all the tables.
@@ -254,18 +267,18 @@ simulation::simulation(const char * command, const char * fname)
         printf("Will calculate both exact and table-based energies and write them to energy.dat.\n");
         energy_output=fopen("energy.dat","w");
         pairs_output=fopen("pairs.pdb","w");
-    }
-#ifdef DEBUG_NON_TABULATED
+    }*/
+/*#ifdef DEBUG_NON_TABULATED
     if (!do_energy) {
-    	total_energy(oldcenter,oldorient,initcoords,energies,&etot);
+    	total_energy(initcoords,energies,&etot);
     	print_energies(stdout,true,"init:",0,energies,etot);
     }
 #endif*/
     //don't need this anymore, we will do the energies in do_energies
-    //if (do_energy) {
+    if (do_energy) {
        total_energy(oldcoords,energies,&etot);
        print_energies(stdout,TRUE,"Energy: ",0,energies,etot);
-    //}
+    }
 #endif //EXCHANGE
     fclose(f); //Close control file. We're done with it.
 }

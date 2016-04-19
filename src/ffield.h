@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include "util.h" //for subset
 //#include "fragments.h"
 
 
@@ -191,7 +192,7 @@ public:
     forcefield(char * fname);
     void nonbond_energy(int rdie, int type1,  int type2, int is14, double r2, double * evdw, double * eelec);
     double exact_interaction_energy(int pbc, double halfboxsize, double boxsize,double eps,  int rdie, int natom1, int * types1, double * coords1, int natom2, int * types2, double * coords2);
-    void moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, bool * movedatoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies);
+    void moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
     void non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
     void link_fragments(void);
     void find_parameters(int numOfAtoms, ATOMS * atoms);

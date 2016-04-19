@@ -37,7 +37,7 @@ struct dcd_titles {
 
 //The offsets are one less than indicated on the PDB standard, because
 //C arrays are zero-based.
-const char * origin = "Produced by Tabulated Monte Carlo code";
+const char * origin = "Produced by Mixed-Resolution Monte Carlo code";
 
 void topology::read_pdb_file(char * fname, double * coords)
 {
@@ -59,10 +59,13 @@ void topology::read_pdb_stream(FILE * input, double * coords)
     while (!feof(input)) {
         fgets(buf,sizeof(buf),input);
         if (strncasecmp("END",buf,3)==0) break;
-        if (strncasecmp("ATOM  ",buf,6)!=0) continue;
+        if ((strncasecmp("ATOM  ",buf,6)!=0) && (strncasecmp("HETATM",buf,6)!=0)) continue;
         //if (strncasecmp("ENDMDL",buf,6)==0)
-        sscanf(buf+12,"%4s",aname);
-            aname[4]='\0';
+        //Using " sscanf(buf+12,"%4s",aname)  can run into problems when column 17 is occupied and copied into the name.
+        strncpy(buf2,buf+12,4);    
+        buf2[4]='\0';
+        sscanf(buf2,"%4s",aname);
+        aname[4]='\0';
         sscanf(buf+22,"%3d",&ires);
         chain=buf[21];
         sscanf(buf+30,"%lf%lf%lf",&x,&y,&z);
@@ -164,15 +167,90 @@ void topology::write_pdb_file(char * fname, double * coords)
         fmt05='(/2I10,A)'
         fmt06='(2I10,3X,L1,3G14.6)'
 */
-//This subroutine is incomplete.
+
+//actual -- number of actual bonds, angles, etc.
+//count -- number of items in the list.write_int_list_psf(f,"!MOLNT",8,0,NULL);
+void write_int_list_psf(FILE * output, const char * label, int numperline, int actual, int count, int * list)
+{
+    int i;
+    fprintf(output,"%10d %s\n",actual,label);
+    for (i=0; i<count; i++) {
+        fprintf(output,"%10d",list[i]);
+        if ((i+1)%numperline==0) fprintf(output,"\n");
+    }
+    if (count%numperline!=0) fprintf(output,"\n");
+    fprintf(output,"\n");
+}
+
+//Warning: do not attept to use the psf written by this subroutine for energy analysis in CHARMM.
+//It is for visualization purposes only.
 void topology::write_psf_file(char * fname, forcefield * ffield)
 {
     FILE * f;
-    int iatom,ires,iseg;
+    int iatom,ires,iseg,j,jatom,a,b,c,d,numOfAtoms;
     char chain;
     double q;
     const char * atomfmt = "%10d        %c %-8d %-8s %-8s %4d %14.6f%14.6f%8d%14.6f%14.6f\n"; //fmt02a above
-
+    vector<int> bonds;
+    vector<int> angles;
+    vector<int> dihedrals;
+    vector<int> impropers;
+    bonds.clear();
+    angles.clear();
+    dihedrals.clear();
+    impropers.clear();
+    //We need to read the bonds, angle, dihedral informaiton from the ATOMS structures and put it into single lists
+    //for writing to the apppropriate sections of the PSF file.
+    for(iatom=0;iatom<natom;iatom++){
+        for(j=0;j<atoms[iatom].numOfBondedAtoms;j++){
+            jatom = atoms[iatom].bondedAtomList[j];
+            if(jatom>iatom){//avoid double counting bond energies b/c if iatom contains jatom, jatom contains iatom
+                bonds.push_back(iatom+1);
+                bonds.push_back(jatom+1);
+            }
+        }
+    }
+    for(iatom=0;iatom<natom;iatom++){
+        for(j=0;j<atoms[iatom].numOfAngles;j++){
+            a = atoms[iatom].angleAtomList[3*j];
+            b = atoms[iatom].angleAtomList[3*j+1];
+            c = atoms[iatom].angleAtomList[3*j+2];
+            if((iatom==a && iatom<c) || (iatom==c && iatom<a)){//avoid double counting bond angle energies
+                angles.push_back(a+1);
+                angles.push_back(b+1);
+                angles.push_back(c+1);
+            }
+        }
+    }
+    for(iatom=0;iatom<natom;iatom++){
+        for(j=0;j<atoms[iatom].numOfBonded14Atoms;j++){
+            a = atoms[iatom].bonded14AtomList[4*j];
+            b = atoms[iatom].bonded14AtomList[4*j+1];
+            c = atoms[iatom].bonded14AtomList[4*j+2];
+            d = atoms[iatom].bonded14AtomList[4*j+3];
+            if (d>a){//avoid double counting dihedral energies
+                dihedrals.push_back(a+1);
+                dihedrals.push_back(b+1);
+                dihedrals.push_back(c+1);
+                dihedrals.push_back(d+1);
+            }
+        }
+    }
+    for(iatom=0;iatom<natom;iatom++){
+        for(j=0;j<atoms[iatom].numOfImprops;j++){
+//for the CHARMM19 force field, atom "a" is the central atom; for AMBER, the central atom is "c"
+            a = atoms[iatom].impropAtomList[4*j];
+            b = atoms[iatom].impropAtomList[4*j+1];
+            c = atoms[iatom].impropAtomList[4*j+2];
+            d = atoms[iatom].impropAtomList[4*j+3];
+            if((iatom==c)){//avoid multi-counting improper dihedral energies
+                impropers.push_back(a+1);
+                impropers.push_back(b+1);
+                impropers.push_back(c+1);
+                impropers.push_back(d+1);
+            }
+        }
+    }
     f=fopen(fname,"w");
     if (f==NULL) {
         printf("Could not open pdb file %s for writing\n",fname);
@@ -183,6 +261,7 @@ void topology::write_psf_file(char * fname, forcefield * ffield)
     fprintf(f,"%10d !NTITLE\n",1);
     fprintf(f,"%s\n",origin);
     fprintf(f,"\n");
+    fprintf(f,"%10d !NATOM\n",natom);
     for (iatom=0; iatom<natom; iatom++) {
         ires=atoms[iatom].resNum;
         chain=' ';
@@ -191,9 +270,25 @@ void topology::write_psf_file(char * fname, forcefield * ffield)
             ires=ires-segstart[iseg];
         }
         q=ffield->chargeParams[atoms[iatom].type];
-        fprintf(f,atomfmt,iatom+1,chain,ires+1,atoms[iatom].resName,atoms[iatom].name,atoms[iatom].type,q,
+        //the types are wrong.  Would need to add a table interrelating TINKER atom classes and CHARMM type numbers/names.
+        fprintf(f,atomfmt,iatom+1,chain,ires+1,atoms[iatom].resName,atoms[iatom].name,atoms[iatom].classx,q,
             atoms[iatom].mass,0,0.0,0.0);
     }
+    fprintf(f,"\n");
+    write_int_list_psf(f,"!NBOND: bonds",8,bonds.size()/2,bonds.size(),&bonds[0]);
+    write_int_list_psf(f,"!NTHETA: angles",9,angles.size()/3,angles.size(),&angles[0]);
+    write_int_list_psf(f,"!NPHI: dihedrals",8,dihedrals.size()/4,dihedrals.size(),&dihedrals[0]);
+    write_int_list_psf(f,"!NIMPHI: impropers",8,impropers.size()/4,impropers.size(),&impropers[0]);
+    //We don't have any of the rest of this stuff, so try writing all zeros.
+    write_int_list_psf(f,"!NDON: donors",8,0,0,NULL);
+    write_int_list_psf(f,"!NACC: acceptors",8,0,0,NULL);
+    write_int_list_psf(f,"!NNB",8,0,0,NULL);
+    fprintf(f,"%10d%10d %s\n",0,0,0,"!NGRP NST2");
+    fprintf(f,"\n");
+    write_int_list_psf(f,"!MOLNT",8,0,0,NULL);
+    fprintf(f,"%10d%10d %s\n",0,0,"!NUMLP NUMLPH");
+    fprintf(f,"\n");
+    write_int_list_psf(f,"!NCRTERM: cross-terms",8,0,0,NULL);
     fclose(f);
 }
 

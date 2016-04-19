@@ -19,6 +19,7 @@
 #define RT_SIDECHAIN              2
 #define MAX_FRAGMENT_NAME         32
 
+using namespace std;
 /*&struct fragment {
     int type; //Fragment type index.
     int is_side_chain; //Whether or not the fragment is part of the side chain.
@@ -46,6 +47,14 @@ struct resfraginfo {
     int itype,jtype;
     int */
 //Definition of a residue.
+
+struct mc_move {
+    //atoms forming axis around which
+    int iaxis, jaxis;
+    subset movedatoms;
+    //void perform(double * coords);
+};
+
 struct residuedef {
     char name[4];
     int natom; //Number of atoms per residue.
@@ -150,6 +159,11 @@ struct topology {
     void create_sidechain_move(bool * moved, int * atom1, int * atom2);
     void create_backrub_move(bool * moved, int * atom1, int * atom2);
     void get_moved_atoms(bool * movedfrag, bool * movedatoms);
+    void print_atom_subset(subset atomset);
+    subset follow_bonds(int iatom, const subset exclude);
+    void generate_backbone_moves(vector<mc_move> * backbone_moves);
+    void generate_sidechain_moves(vector<mc_move> * sidechain_moves);
+    void generate_backrub_moves(vector<mc_move> * backrub_moves);
     //SASA stuff.
     //void add_to_overlap_list(int ifrag, int jfrag, double * coords, std::vector<atom_nb_entry> * overlap_list);
     //void create_overlap_list(int nb_list_per_frag, int * nb_list_count, int * nonbond_list, double * coords, std::vector<atom_nb_entry> * overlap_list);

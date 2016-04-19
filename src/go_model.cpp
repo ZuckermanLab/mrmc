@@ -126,10 +126,55 @@ void go_model_info::create_contact_map(int nres, reslookup * resinfo, int natom,
 
 }
 
+double go_model_info::moved_energy(int pbc, double halfboxsize, double boxsize, go_model_params * params, int nres, reslookup * resinfo, subset& aaregion_res, subset& movedatoms, int natom, double * coords)
+{
+    double en,entot,dx[3],r2;
+    int ientry,k,ifragatom,jfragatom,iexp,ires,jres,iatom,jatom;
+    double a,am,an,native_distance2;
+    entot=0.0;
 
+     for (ires=0; ires<nres; ires++)
+        for (jres=ires+2; jres<nres; jres++)
+        //Go energy only if both atoms are in the CG region.
+            if (!aaregion_res[ires] && !aaregion_res[jres]) {
 
-//this needs the fragmenttype objects in order to look up residue numbers.
-double go_model_info::energy(int pbc, double halfboxsize, double boxsize, go_model_params * params, int nres, reslookup * resinfo, subset aaregion_res, int natom, double * coords)
+                    //Determine native distance.
+                iatom=resinfo[ires].branchatom;
+                jatom=resinfo[jres].branchatom;
+                //only do energy if one atom moved and not the other
+                if (!(movedatoms[iatom]^movedatoms[jatom])) continue;
+                r2=pbc_distance2(pbc,halfboxsize,boxsize,&coords[3*iatom],&coords[3*jatom]);
+                if (r2<=0) {
+                    printf("go_model_info::energy: error, ifragatom=%d jfragatom=%d r2=%.2f\n",ifragatom,jfragatom,r2);
+                    die();
+                }
+            /*if (r2<entries[ientry].low_distance2) return CLASH_ENERGY;
+            if (r2<entries[ientry].hi_distance2) { //intermediate range in equations
+                if (entries[ientry].native) en+=native_energy; else en+=nonnative_energy;
+            }*/
+                native_distance2=distances[nres*ires+jres];
+                if (native_distance2<params->cutoff2) a=native_distance2/r2; else a=params->hardcore2/r2;
+                if (a<params->rsubcutoff)  continue; //<1% of native energy
+                an=1;
+                for (iexp=1; iexp<=params->hn; iexp++) an*=a;
+                //an now equals (r/r_nat)^n or (r/r_hc)^n
+                am=an;
+                if (params->m==2*params->n) am=an*an; else for (; iexp<=params->hm; iexp++) am*=a;
+                //am now equals (r/r_nat)^m or (r/r_hc)^m
+                if (native_distance2<params->cutoff2) {
+                    en=params->scaled_native_en*(am-params->ratio*an);
+                } else {
+                    en=params->scaled_nonnative_en*am;
+                }
+#ifdef DEBUG
+                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
+#endif
+                entot+=en;
+        }
+    return entot;
+}
+
+double go_model_info::energy(int pbc, double halfboxsize, double boxsize, go_model_params * params, int nres, reslookup * resinfo, subset& aaregion_res, int natom, double * coords)
 {
     double en,entot,dx[3],r2;
     int ientry,k,ifragatom,jfragatom,iexp,ires,jres,iatom,jatom;
@@ -169,13 +214,14 @@ double go_model_info::energy(int pbc, double halfboxsize, double boxsize, go_mod
                     en=params->scaled_nonnative_en*am;
                 }
 #ifdef DEBUG
-                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
+                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
 #endif
                 entot+=en;
         }
     return entot;
 }
 
+/*i
 /*int go_model_info::count_native_contacts(int pbc, double halfboxsize, double boxsize, double cutoff, double ratio, fragmenttype * ifragtype, double * icoords, fragmenttype * jfragtype, double * jcoords)
 {
     double dx[3],r2,cutoff2,ratio2;

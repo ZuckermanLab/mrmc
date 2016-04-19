@@ -456,7 +456,7 @@ int term_needed(bool * moved, ATOMS * atoms, int a, int b, int c, int d)
 //Optimized bit twiddling.  A term is needed only if at least one atom is moved, and at least one atom isn't.
 //The bit is set if the atom is moved.  Consequently the term is needed if the mask is not 000 and not 111 (or 1111 in the case of 4 atoms).
 //Overloaded twice -- once for 3 atoms, once for 4.
-inline bool term_needed(const bool * movedatoms, const int a, const int b, const int c)
+inline bool term_needed(subset& movedatoms, const int a, const int b, const int c)
 {
     int mask;
     mask=0;
@@ -466,7 +466,7 @@ inline bool term_needed(const bool * movedatoms, const int a, const int b, const
     return (mask!=0) && (mask!=7);
 }
 
-inline bool term_needed(const bool * movedatoms, const int a, const int b, const int c, const int d)
+inline bool term_needed(subset& movedatoms, const int a, const int b, const int c, const int d)
 {
     int mask;
     mask=0;
@@ -481,7 +481,7 @@ inline bool term_needed(const bool * movedatoms, const int a, const int b, const
 //Therefore, we don't need bonds at all, and we only need terms that cross the boundary between moved/unmoved fragments.
 //Also includes all non-tabulated interaction terms.
 //To do: incorporate cutoff into nonbond calculation.
-void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, bool * movedatoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
+void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
 {
   int i,j,k;
   int ij;
@@ -489,35 +489,35 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   int iatom,jatom;
   int a,b,c,d;
   int type;
-  int iclass,jclass;//M
+  int iclass,jclass;
   int ilibsc;
   int icsc;
   int count;
-  int needed;
   double nbflag;
   double fi,temp;
-  double ba[3],bc[3],cd[3],ad[3];
+  double ba[3],bc[3],cd[3],ad[3],ac[3];
   double dx,dy,dz;
   double r2,r6;
   double K;
   double r,r0;
   double theta,theta0,chi0;
-  double dihed;
+  double dihed,diff;
   double en;
   double evdw,evdw2,eelec; /*for corrections*/
   bool is14;
-  //zero out all energy terms excapt fragment interactions, which may have been previously calculated
+  //zero out all energy terms excapt interactions, which may have been previously calculated
 
-  for (i=EN_BOND; i<EN_TERMS; i++) energies[i]=0.0;
+  //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
 
-  //calculate bond energies.
-  //Since all moves implemented so far are rigid transformations of a selected subset of fragments, none of them changed
+
+
+  //printf("bond stretching: %f kcal/mol, the number of interactions: %d\n",engBond,count);
+
   //calculate bond angle energies
 #ifdef TIMERS
    switch_timer(TIMER_NT_ANGLES);
 #endif
   count=0;
-
   for(iatom=0;iatom<numOfAtoms;iatom++){
     for(j=0;j<atoms[iatom].numOfAngles;j++){
       a = atoms[iatom].angleAtomList[3*j];
@@ -542,11 +542,10 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
         energies[EN_ANGLE] += K*(theta - theta0)*(theta - theta0);
         count++;
 #ifdef DEBUG_NON_TABULATED
-        printf("angle: %d %d %d\n",a,b,c);
+        printf("Angle: %d %d %d %d\n",count,a,b,c);
 #endif
-        //We assume here that if the term is needed, then fragments "a" and "c" are not the same.
         //if (atoms[a].fragment!=atoms[c].fragment) {
-        /*&    dx = coords[3*c]   - coords[3*a];
+        /*    dx = coords[3*c]   - coords[3*a];
             dy = coords[3*c+1] - coords[3*a+1];
             dz = coords[3*c+2] - coords[3*a+2];
             nonbond_energy(rdie,atoms[a].type,atoms[c].type,FALSE,dx,dy,dz,&evdw,&eelec);
@@ -566,42 +565,52 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   count=0;
   for(iatom=0;iatom<numOfAtoms;iatom++){
     for(j=0;j<atoms[iatom].numOfImprops;j++){
+//for the CHARMM19 force field, atom "a" is the central atom; for AMBER, the central atom is "c"
       a = atoms[iatom].impropAtomList[4*j];
       b = atoms[iatom].impropAtomList[4*j+1];
       c = atoms[iatom].impropAtomList[4*j+2];
       d = atoms[iatom].impropAtomList[4*j+3];
 
-      //if(term_needed(movedatoms,a,b,c,d) && (iatom==a)&&(a<d)){//avoid multi-counting improper dihedral energies
-      if(term_needed(movedatoms,a,b,c,d) && (iatom==c)){
+      if(term_needed(movedatoms,a,b,c,d) && (iatom==c)){//avoid multi-counting improper dihedral energies
           //The CHARMM 19 force field needs to be defined like this, replacing the "BC" axis with the "AD" axis.
+        cd[0] = coords[3*d]   - coords[3*c];
+        cd[1] = coords[3*d+1] - coords[3*c+1];
+        cd[2] = coords[3*d+2] - coords[3*c+2];
+#ifdef CHARMM19
         ba[0] = coords[3*a]   - coords[3*b];
         ba[1] = coords[3*a+1] - coords[3*b+1];
         ba[2] = coords[3*a+2] - coords[3*b+2];
         ad[0] = coords[3*a]   - coords[3*d];
         ad[1] = coords[3*a+1] - coords[3*d+1];
         ad[2] = coords[3*a+2] - coords[3*d+2];
-
-        /*bc[0] = coords[3*c]   - coords[3*b];
-        bc[1] = coords[3*c+1] - coords[3*b+1];
-        bc[2] = coords[3*c+2] - coords[3*b+2];*/
-
-        cd[0] = coords[3*d]   - coords[3*c];
-        cd[1] = coords[3*d+1] - coords[3*c+1];
-        cd[2] = coords[3*d+2] - coords[3*c+2];
-
-        //dihed = acos(cos_dihedral(ba,ad,cd));
-        dihed=dihedral(ba,ad,cd);
+	dihed = dihedral(ba,ad,cd);
+#elif AMBER
+        bc[0] = coords[3*b]   - coords[3*c];
+        bc[1] = coords[3*b+1] - coords[3*c+1];
+        bc[2] = coords[3*b+2] - coords[3*c+2];
+        ac[0] = coords[3*a]   - coords[3*c];
+        ac[1] = coords[3*a+1] - coords[3*c+1];
+        ac[2] = coords[3*a+2] - coords[3*c+2];
+	dihed = cos_dihedral(ac,cd,bc);
+#endif
         //dihed = M_PI-fabs(dihed);
+
 
         type = atoms[iatom].impropParamType[j];
         K = impropParams[type].K;
         chi0 = impropParams[type].chi0;
-#ifdef DEBUG_NON_TABULATED
-        printf("improper: %d %d %d %d \n",a,b,c,d);//,dihed*DEG_TO_RAD,
+#ifdef CHARMM19
+        en = K * (dihed-chi0) * (dihed-chi0);
+#else
+	//dihed is the cosine of the dihedral.  AMBER uses the formula E = (1/2)(1+cos(2*phi-180)).
+        //assumes chi0 = 180 degrees.
+        en = K * 2.0 * (1 - dihed*dihed);
 #endif
-        //energies[EN_IMPROPER] += impropParams[type].K*(1.0-cos(2.0*(dihed-chi0)));
-        energies[EN_IMPROPER] += K*(dihed-chi0)*(dihed-chi0);
-        //printf("%d %d %d %d  %d  %f  %f  %.4f\n",a+1,b+1,c,d,type,impropParams[type].V,dihed*RAD_TO_DEG,eng);
+        energies[EN_IMPROPER] += en;
+#ifdef DEBUG_NON_TABULATED
+        printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %.4f %.2f %.2f %.4f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
+		atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
+#endif
 
         count++;
       }
@@ -622,7 +631,7 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       c = atoms[iatom].bonded14AtomList[4*j+2];
       d = atoms[iatom].bonded14AtomList[4*j+3];
 
-      if(term_needed(movedatoms,a,b,c,d) && (d>a)){//avoid double counting dihedral energies
+      if (term_needed(movedatoms,a,b,c,d) && (d>a)){//avoid double counting dihedral energies
         ba[0] = coords[3*a]   - coords[3*b];
         ba[1] = coords[3*a+1] - coords[3*b+1];
         ba[2] = coords[3*a+2] - coords[3*b+2];
@@ -637,15 +646,15 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
 
         dihed = cos_dihedral(ba,bc,cd);
         type  = atoms[iatom].bonded14DihedParamType[j];
-        /*en = MDE(dihed,type);
-        printf("%d %s %s %s %s %d %d %d %d %.4f %.4f %.4f %.4f %.2f %.4f\n",count,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
+        en = MDE(dihed,type);
+#ifdef DEBUG_NON_TABULATED
+        printf("Dihedral: %d %d %d %d %s %s %s %s %d %d %d %d %.4f %.4f %.4f %.4f %.2f %.4f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
             atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,
-            dihedParams[type].V[0],dihedParams[type].V[1],dihedParams[type].V[2],dihedParams[type].V[3],dihed*RAD_TO_DEG,en);*/
+            dihedParams[type].V[0],dihedParams[type].V[1],dihedParams[type].V[2],dihedParams[type].V[3],acos(dihed)*RAD_TO_DEG,en);
+#endif
         energies[EN_DIHEDRAL] += MDE(dihed,type);
         count++;
-#ifdef DEBUG_NON_TABULATED
-        printf("dihedral: %d %d %d %d\n",a,b,c,d);
-#endif
+        //printf("%d %d %d %d %d\n",count,a+1,b+1,c+1,d+1);
         //Include 1-4 nonbonded interactions between atoms belonging to the same fragment.  Make use of special 1-4 parameters when necessary.
         //Subtract any possibly erroneous VDW interactions involving atoms not belonging to the same fragment.
         //if (atoms[a].fragment!=atoms[d].fragment) {
@@ -655,29 +664,27 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
             nonbond_energy(rdie,atoms[a].type,atoms[d].type,TRUE,dx,dy,dz,&evdw2,&eelec);
             //energies[EN_VDW14]+=BONDED14_SCALE*evdw;
             nonbond_energy(rdie,atoms[a].type,atoms[d].type,FALSE,dx,dy,dz,&evdw,&eelec);
-            energies[EN_VDW14]+=(evdw2-evdw);
-            //if (atoms[a].fragment!=atoms[d].fragment)
-            //energies[EN_VDW14]-=evdw;
+            energies[EN_VDW14]+=evdw2-evdw;
+            //if (atoms[a].fragment!=atoms[d].fragment) energies[EN_VDW14]-=evdw;
             //Already been counted if both atoms are in different fragments.
 
             //if (atoms[a].fragment==atoms[d].fragment) {
-            //energies[EN_ELEC14]+=BONDED14_SCALE*eelec;
-            //if (atoms[a].fragment!=atoms[d].fragment)
-            //energies[EN_ELEC14]-=eelec;
-        //}*/
+            energies[EN_ELEC14]+=(BONDED14_SCALE-1)*eelec;*/
+            //if (atoms[a].fragment!=atoms[d].fragment) energies[EN_ELEC14]-=eelec;
+        //}
       }
     }
   }
- //Calculate all interaction terms that need to be calculated exactly.
- #ifdef TIMERS
+#ifdef TIMERS
   switch_timer(TIMER_NT_VDW_ELEC);
 #endif
+  //printf("dihedral: %f kcal/mol, the number of interactions: %d\n",engDihed,count);
+  //Calculate all interaction terms that need to be calculated exactly.
   for (i=0; i<nb_atom_list_size; i++) {
       iatom=nb_atom_list[i].iatom;
       jatom=nb_atom_list[i].jatom;
-      //The interaction needs to be computed if exactly one of iatom/jatom  has been moved (since all moves are rigid on subsets of atoms)
-      //I think this is ok because the C++ standard requires that "bool" values be casted to int, with false=0 and true=1.
       if (!(movedatoms[iatom]^movedatoms[jatom])) continue;
+      //todo: figure out a way to determine 1-4 relationships on the fly
       is14=nb_atom_list[i].is14;
       dx=coords[3*jatom]-coords[3*iatom];
       dy=coords[3*jatom+1]-coords[3*iatom+1];
@@ -687,17 +694,17 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
-#ifdef DEBUG_NON_TABULATED
-      printf("nonbond: %d %d\n",iatom,jatom);
+#ifdef DEBUG
+      printf("Nonbonded interaction: %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
 #endif
   }
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST/eps;
 #ifdef TIMERS
   switch_timer(TIMER_OTHER);
 #endif
-  //printf("dihedral: %f kcal/mol, the number of interactions: %d\n",engDihed,count);
-
 }
+
+
 
 void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies)
 {
@@ -911,7 +918,7 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
 
             //if (atoms[a].fragment==atoms[d].fragment) {
             energies[EN_ELEC14]+=(BONDED14_SCALE-1)*eelec;*/
-            //if (atoms[a].fragment!=atoms[d].fragment) energies[EN_ELEC14]-=eelec;
+            //if (atoms[a].fragment!=atoms[d].fragment)  for(iatom=0;iatom<numOfAtoms;iatom++){
         //}
       }
     }
@@ -919,6 +926,7 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
 
   //printf("dihedral: %f kcal/mol, the number of interactions: %d\n",engDihed,count);
   //Calculate all interaction terms that need to be calculated exactly.
+  //The list does not contain atom pairs where both atoms are in the CG region.
   for (i=0; i<nb_atom_list_size; i++) {
       iatom=nb_atom_list[i].iatom;
       jatom=nb_atom_list[i].jatom;
@@ -932,7 +940,7 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
-#ifdef DEBUG_NON_TABULATED
+#ifdef DEBUG
       printf("Nonbonded interaction: %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
 #endif
   }
@@ -976,6 +984,7 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
   for(i=0;i<numOfAtoms;i++){
     atoms[i].classx=atomTypeLookUp[atoms[i].type].classx;
     atoms[i].atomicNum=atomTypeLookUp[atoms[i].type].atomicNum;
+    atoms[i].mass=atomTypeLookUp[atoms[i].type].mass;
     //printf("atom: %d, type: %d, class: %d\n",i,atoms[i].type,atoms[i].classx);
   }
 
@@ -1006,6 +1015,7 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
     for(j=0;j<atoms[iatom].numOfBondedAtoms;j++)
     {
       jatom=atoms[iatom].bondedAtomList[j];
+      atoms[iatom].bondedParamType[j]=-1;
       for(k=0;k<numOfBondParams;k++)
       {
         if(atoms[iatom].classx==bondParams[k].atomClass[0] && atoms[jatom].classx==bondParams[k].atomClass[1] || atoms[iatom].classx==bondParams[k].atomClass[1] && atoms[jatom].classx==bondParams[k].atomClass[0])
@@ -1015,6 +1025,11 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
           break;
         }
 
+      }
+      if (atoms[iatom].bondedParamType[j]<0) { //not found
+        printf("Could not find bonded parameters for atoms %d %s and %d %s classes %d %d\n",atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,
+           atoms[iatom].classx,atoms[jatom].classx);
+        die();
       }
     }
   }
@@ -1027,6 +1042,7 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
     for (num=0; num<atoms[iatom].numOfAngles; num++) {
         jatom=atoms[iatom].angleAtomList[3*num+1];
         katom=atoms[iatom].angleAtomList[3*num+2];
+        atoms[iatom].angleParamType[num] = -1;
         for(m=0;m<numOfAngleParams;m++)
         {
             if(atoms[iatom].classx==angleParams[m].atomClass[0] && atoms[jatom].classx==angleParams[m].atomClass[1] && atoms[katom].classx==angleParams[m].atomClass[2] || atoms[iatom].classx==angleParams[m].atomClass[2] && atoms[jatom].classx==angleParams[m].atomClass[1] && atoms[katom].classx==angleParams[m].atomClass[0])
@@ -1035,6 +1051,11 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
                 //printf("%d %d %d %d  %d\n",i,iatom,jatom,katom,k);
             break;
             }
+        }
+        if (atoms[iatom].angleParamType[num]<0) {
+            printf("Could not find angle parameters for atoms %d %s, %d %s, %d %s  classes %d %d %d\n",atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,  
+                atoms[katom].resNum+1,atoms[katom].name,atoms[iatom].classx,atoms[jatom].classx,atoms[katom].classx);
+            die();
         }
     }
     }
@@ -1063,6 +1084,7 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
       jatom = atoms[i].bonded14AtomList[4*j+1];
       katom = atoms[i].bonded14AtomList[4*j+2];
       matom = atoms[i].bonded14AtomList[4*j+3];
+      atoms[i].bonded14DihedParamType[j] = -1;
       for(k=0;k<numOfDihedParams;k++){
         if(atoms[iatom].classx==dihedParams[k].atomClass[0] && atoms[jatom].classx==dihedParams[k].atomClass[1] && atoms[katom].classx==dihedParams[k].atomClass[2] && atoms[matom].classx==dihedParams[k].atomClass[3]
         || atoms[iatom].classx==dihedParams[k].atomClass[3] && atoms[jatom].classx==dihedParams[k].atomClass[2] && atoms[katom].classx==dihedParams[k].atomClass[1] && atoms[matom].classx==dihedParams[k].atomClass[0]){
@@ -1071,6 +1093,13 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
           break;
         }
       }
+      if (atoms[i].bonded14DihedParamType[j]<0) {
+         printf("Could not find dihedral parameters for atoms %d %s, %d %s, %d %s, %d %s classes %d %d %d %d\n",
+                atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,        
+                atoms[katom].resNum+1,atoms[katom].name,atoms[matom].resNum+1,atoms[matom].name,
+                atoms[iatom].classx,atoms[jatom].classx,atoms[katom].classx,atoms[matom].classx);
+         die();
+      }     
     }
   }
     /*for(j=0;j<atoms[i].numOfBonded14AddAtoms;j++){

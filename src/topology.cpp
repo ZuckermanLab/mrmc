@@ -85,11 +85,15 @@ topology::topology(const char * commandfile, forcefield * ffield)
     }
     while (!feof(f)) {
         fgets(command,sizeof(command),f);
-	if (feof(f)) break;
-        for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
+        if (feof(f)) break;
+        for (i=0; i<strlen(command); i++) {
+            command[i]=toupper(command[i]);
+            if (command[i]=='#') command[i]='\0';
+        }
+   //for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
         token=strtok(command,delim);
         if (token==NULL) continue; //blank line
-        else if (*token=='#') continue; //comment
+        //else if (*token=='#') continue; //comment
 /*
         else if (strncmp("FRAG",token,4)==0) { //load a fragment
             //sscanf(token,"%*s %8s %255s\n",name,fname);
@@ -143,11 +147,17 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
     def->branchatom=-1;
     while (!feof(f)) {
         fgets(command,sizeof(command),f);
-        for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
+        for (i=0; i<strlen(command); i++) {
+            command[i]=toupper(command[i]);
+            if (strcmp(def->name,"TRP")==0) {
+                printf(""); //debug lander
+            }
+            if (command[i]=='#') command[i]='\0';
+        }
         strncpy(command2,command,sizeof(command2));
         token=strtok(command2,delim);
         if (token==NULL) continue; //blank line
-        else if (*token=='#') continue; //comment
+        //else if (*token=='#') continue; //comment
         else if (strncmp("END",token,3)==0) return; //end of the residue definition
         else if (strncmp("ATOM",token,4)==0) {
             //sscanf(command,"%*s %s",atomnames[natom]);

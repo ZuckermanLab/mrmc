@@ -41,7 +41,8 @@ public:
     //int itype, jtype;//,inatom,jnatom;
     void create_contact_map(int nres, reslookup * resinfo, int natom, double * nativecoords, go_model_params * params, subset aaregion_res);
     //void set_parameters(go_model_params * params);
-    double energy(int pbc, double halfboxsize, double boxsize, go_model_params * params, int nres, reslookup * resinfo, subset aaregion_res, int natom, double * coords); //need actual parameters
+    double moved_energy(int pbc, double halfboxsize, double boxsize, go_model_params * params, int nres, reslookup * resinfo, subset& aaregion_res, subset& movedatoms, int natom, double * coords);
+    double energy(int pbc, double halfboxsize, double boxsize, go_model_params * params, int nres, reslookup * resinfo, subset& aaregion_res, int natom, double * coords); //need actual parameters
     //int count_native_contacts(int pbc, double halfboxsize, double boxsize, double cutoff, double ratio, fragmenttype * ifragtype, double * icoords, fragmenttype * jfragtype, double * jcoords);
     //void read_file(char * fname);
     //void write_file(char * fname);

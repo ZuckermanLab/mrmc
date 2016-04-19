@@ -171,6 +171,8 @@ int count_words(char * str) {
 
    return numWords;
 }
+
+
 //Parse a string containing something of the form 1,3,5,7-9 and set the corresponding flags.
 //Integers mentioned go from 1 to count. flags is zero-based, so 1 corresponds to flags[0], etc.
 void subset::parse_int_list(char * str)
@@ -182,6 +184,11 @@ void subset::parse_int_list(char * str)
     int start,end,i,m;
     //for (i=0; i<count; i++) flags[i]=false;
     init(n); //zero out any previous set
+    if ((strlen(str)==0) || (strstr(str,"NONE")!=NULL) || (strstr(str,"none")!=NULL)) return; //empty set 
+    if ((strstr(str,"ALL")!=NULL) || (strstr(str,"all")!=NULL)) { //universal set
+        for (i=0; i<n; i++) (*this)+=i;
+        return;
+    }
     token=str;
     while (true) {
         tokenend=strchr(token,',');

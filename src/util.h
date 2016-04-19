@@ -17,6 +17,7 @@ char yesno(int x);
 void strlower(char * s);
 char * read_multiline(FILE * input);
 int count_words(char * str);
+
 unsigned int digital_crc32(const unsigned char *buf, size_t len);
 #if defined(PARALLEL) || defined(EXCHANGE)
 void parallel_init(int * mynod, int * numnod, char * outputfmt);
@@ -146,7 +147,7 @@ public:
     inline void print(char * name) {
         long int i;
         printf("%s = ",name);
-        for (i=0; i<n; i++) if ((*this)[i]) printf("%d,",i+1);
+        for (i=0; i<n; i++) if ((*this)[i]) printf("%ld,",i+1);
         printf("\n");
     }
     /*inline void to_clique_info(clique_info * info) {
@@ -184,10 +185,10 @@ public:
 #define TIMER_INT_ORIENT     11
 #define TIMER_INT_TRANS      12
 #define TIMER_INT_INDEX      13
-#define TIMER_INT_LOOKUP     14
-#define TIMER_INT_OTHER      15*/
-#define TIMER_NB_LIST        7
-#define TIMER_OTHER          8
+#define TIMER_INT_LOOKUP     14*/
+#define TIMER_INT_OTHER      7
+#define TIMER_NB_LIST        8
+#define TIMER_OTHER          9
 #define NTIMERS              10
 
 struct timer {
@@ -198,7 +199,7 @@ struct timer {
 
 static struct timer timers[NTIMERS];
 static volatile int current_timer;
-static const char * timer_names[NTIMERS] = {"MC moves","Bonds","Angles","Dihedrals","Impropers","Non tab. VDW/Elec","Go potential","Nonbond list update","Other"};
+static const char * timer_names[NTIMERS] = {"MC moves","Bonds","Angles","Dihedrals","Impropers","Non tab. VDW/Elec","Go potential","Other interaction","Nonbond list update","Other"};
 
 /*"Backbone tables","Check cutoff",
     "Exact prep","Exact interaction","Table prep","Table orientational","Table translational","Table index calc","Table lookup","Other interaction",*/
