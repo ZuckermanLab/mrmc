@@ -39,7 +39,7 @@ struct dcd_titles {
 //C arrays are zero-based.
 const char * origin = "Produced by Mixed-Resolution Monte Carlo code";
 
-void topology::read_pdb_file(char * fname, double * coords)
+void topology::read_pdb_file(char * fname, double * coords, int ligand_res)
 {
     FILE * f;
     f=fopen(fname,"r");
@@ -47,10 +47,10 @@ void topology::read_pdb_file(char * fname, double * coords)
         printf("Could not open pdb file %s for reading\n",fname);
         die();
     }
-    read_pdb_stream(f,coords);
+    read_pdb_stream(f,coords,ligand_res);
     fclose(f);
 }
-void topology::read_pdb_stream(FILE * input, double * coords)
+void topology::read_pdb_stream(FILE * input, double * coords, int ligand_res)
 {
     FILE * f;
     char buf[255],buf2[8],aname[6],chain;
@@ -62,14 +62,19 @@ void topology::read_pdb_stream(FILE * input, double * coords)
         if ((strncasecmp("ATOM  ",buf,6)!=0) && (strncasecmp("HETATM",buf,6)!=0)) continue;
         //if (strncasecmp("ENDMDL",buf,6)==0)
         //Using " sscanf(buf+12,"%4s",aname)  can run into problems when column 17 is occupied and copied into the name.
-        strncpy(buf2,buf+12,4);    
+        strncpy(buf2,buf+12,4);
+        if (buf2[0]==' ') strncpy(buf2,buf+13,4); //for nonstandard pdb files where name is shifted one column
         buf2[4]='\0';
         sscanf(buf2,"%4s",aname);
         aname[4]='\0';
         sscanf(buf+22,"%3d",&ires);
         chain=buf[21];
         sscanf(buf+30,"%lf%lf%lf",&x,&y,&z);
-        iatom=find_atom(chain,ires,aname);
+        if (strncasecmp("HETATM",buf,6)==0) {
+            iatom=find_atom(ligand_res,aname);
+        } else {
+            iatom=find_atom(chain,ires,aname);
+        }
         if (iatom<0) {
             printf("Could not find atom %c %d %s from PDB file\n",chain,ires,aname);
             die();
@@ -105,7 +110,7 @@ void topology::write_pdb_file(char * fname, double * coords)
         }
         color=0.0;
         //color main-chain and side-chain fragments separately
-	if ((iatom>0) && (atoms[iatom].fragment!=atoms[iatom-1].fragment)) {
+        if ((iatom>0) && (atoms[iatom].fragment!=atoms[iatom-1].fragment)) {
             if (!atoms[iatom].is_backbone) {
                 scfragcount++;
             } else {

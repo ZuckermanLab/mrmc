@@ -151,7 +151,7 @@ void euler_to_quat(double phi, double theta, double psi, double * q)
 
 //from wikipedia article, first formula (with q[0] as real part, not q_4)
 //It is the same as Steve's LBMC code.
-void quat_to_matrix(double * q, double * r)
+void quat_to_matrix(const double * q, double * r)
 {
     r[0]=1.0-2.0*(q[2]*q[2]+q[3]*q[3]);
     r[1]=2.0*(q[1]*q[2]-q[3]*q[0]);
@@ -658,6 +658,10 @@ void rmsd_fit(int natom, double * weight, double * coords1, double * coords2, do
     double r[3][3],f[4][4],qq[4][4],ev,aux,totalweight,c1center[3],c2center[3],c1center2[3],q[4];
     totalweight=0.0;
     for (iatom=0; iatom<natom; iatom++) totalweight+=weight[iatom];
+    if (totalweight<=0) {
+        *rmsd=0.0;
+        return;
+    }
     //First find the center of each group of atoms, and the difference between them, which is net displacement.
     for (k=0; k<3; k++) {
         c1center[k]=0.0;

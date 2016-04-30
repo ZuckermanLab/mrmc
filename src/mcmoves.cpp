@@ -13,8 +13,7 @@ void simulation::rotate_atoms_by_axis(mc_move * move, const double angle, double
 {
   int iatom,k;
   double axis[3],point[3],axism,quat[4],newquat[4];
-  double rotmatrix[3][3];
-  double disp[3],newdisp[3];
+
   //Compute the axis
   axism=0.0;
   for (k=0; k<3; k++) {
@@ -25,15 +24,22 @@ void simulation::rotate_atoms_by_axis(mc_move * move, const double angle, double
   axism=sqrt(axism);
   for (k=0; k<3; k++) axis[k]/=axism;
   axisangle_to_quat(angle,axis,quat);
-  quat_to_matrix(quat,&rotmatrix[0][0]);
-  for (iatom=0; iatom<top->natom; iatom++) if (move->movedatoms[iatom]) {
+  rotate_atoms_by_point(move->movedatoms,&quat[0],&point[0],coords);
+}
+
+void simulation::rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords)
+{
+    double rotmatrix[3][3];
+    double disp[3],newdisp[3];
+    int iatom,k;
+    quat_to_matrix(quat,&rotmatrix[0][0]);
+    for (iatom=0; iatom<top->natom; iatom++) if (atoms[iatom]) {
       //Rotate center about axis.
       for (k=0; k<3; k++) disp[k]=coords[3*iatom+k]-point[k];
       matmul(&rotmatrix[0][0],disp,newdisp);
       for (k=0; k<3; k++) coords[3*iatom+k]=point[k]+newdisp[k];
   }
 }
-
 //return the subset of all atoms conected to atom iatom through bonds, except those in the exclude subset
 subset topology::follow_bonds(int iatom, const subset exclude)
 {
@@ -188,6 +194,42 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves)
     }
 }
 
+void simulation::do_ligand_trans(double movesize, double * coords)
+{
+    double disp[3],m;
+    int k,iatom;
+    //construct a random vector within the unit sphere, and multiply by movesize
+    //to give a random displacement whose magnitude is no more than movesize.
+    do {
+        m=0.0;
+        for (k=0; k<3; k++) {
+            disp[k]=2.0*genrand_real3()-1.0;
+            m+=disp[k]*disp[k];
+        }
+    } while (m>=1.0);
+    for (k=0; k<3; k++) disp[k]*=movesize;
+    //translate all ligand atoms
+    for (iatom=0; iatom<top->natom; iatom++) if (ligand[iatom]) {
+        for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
+    }
+}
+
+void simulation::do_ligand_rot(double movesize, double * coords)
+{
+    double quat[4],com[3],mass,totmass;
+    int k, iatom;
+    //find the center of mass of the ligand.
+    totmass=0.0;
+    for (k=0; k<3; k++) com[k]=0.0;
+    for (iatom=0; iatom<top->natom; iatom++) if (ligand[iatom]) {
+        mass=top->atoms[iatom].mass;
+        for (k=0; k<3; k++) com[k]+=mass*coords[3*iatom+k];
+        totmass+=mass;
+    }
+    for (k=0; k<3; k++) com[k]/=totmass;
+    rand_small_quat(movesize,&quat[0]);
+    rotate_atoms_by_point(ligand,&quat[0],&com[0],coords);
+}
 
 void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
 {
@@ -216,14 +258,22 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
             movelist=&backrub_moves[0];
             movecount=backrub_moves.size();
             break;
+        case MOVE_LIGAND_TRANS:
+            do_ligand_trans(movesize[MOVE_LIGAND_TRANS],coords);
+            break;
+        case MOVE_LIGAND_ROT:
+            do_ligand_rot(movesize[MOVE_LIGAND_ROT],coords);
+            break;
         default:
             printf("Error in switch statement.\n");
             die();
     }
-    //pick a random move from the list
-    moveindex=(int) (genrand_real3()*movecount);
-    *movedatoms=movelist[moveindex].movedatoms;
-    //top->print_atom_subset(*movedatoms);
-    angle=(2.0*genrand_real3()-1.0)*movesize[move];
-    rotate_atoms_by_axis(&movelist[moveindex],angle,coords);
+    if ((move==MOVE_BACKBONE) || (move==MOVE_SIDECHAIN) || (move==MOVE_BACKRUB)) {
+        //pick a random move from the list
+        moveindex=(int) (genrand_real3()*movecount);
+        *movedatoms=movelist[moveindex].movedatoms;
+        //top->print_atom_subset(*movedatoms);
+        angle=(2.0*genrand_real3()-1.0)*movesize[move];
+        rotate_atoms_by_axis(&movelist[moveindex],angle,coords);
+    }
 }

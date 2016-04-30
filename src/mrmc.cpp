@@ -77,10 +77,8 @@ int main(int argc, char * argv[])
     printf("Justin's MRMC starting at %s\n",buffer);
     printf("Executable name: %s\n",argv[0]);
     fflush(stdout);
-    sim=new simulation(argv[1],argv[2]);
-    if (strcmp(argv[1],"run")==0) {
-        sim->mcloop();
-    }
+    sim=new simulation();
+    sim->process_commands(argv[1]);
     delete sim;
     time(&now);
     strncpy(buffer,ctime(&now),sizeof(buffer));

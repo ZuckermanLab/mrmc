@@ -401,7 +401,7 @@ void topology::insert_residue(const char * res, subset aaregion_res)
                 die();
             }
             //Find the atom with this name in residue ires (either this or the previous residue)
-            iactualatom=find_atom(ires,resdef[restype].frags[ifrag].atomnames[iatom]);
+            iactualatom=`(ires,resdef[restype].frags[ifrag].atomnames[iatom]);
             if (iactualatom<0) {
                 printf("Failed to find residue atom %s in residue %s %d as a partner for fragment atom %s in fragment of type %s\n",
                     resdef[restype].frags[ifrag].atomnames[iatom],resdef[restype].name,nres+1,fragtypes[itype]->names[iatom],fragtypes[itype]->fragname);

@@ -20,9 +20,9 @@
 #endif
 
 #if defined(PARALLEL) || defined(EXCHANGE)
-simulation::simulation(const char * command, const char * fname, int _mynod, int _numnod)
+simulation::simulation(int _mynod, int _numnod)
 #else
-simulation::simulation(const char * command, const char * fname)
+simulation::simulation(void)
 #endif
 {
     FILE * f;
@@ -31,256 +31,23 @@ simulation::simulation(const char * command, const char * fname)
     double ptot,mctemp,p,size;
     double total_table_size;
     char buffer[255],word[255],tablefmt[255],covtablefmt[255],fragfmt[255],structf3name[255],psffname[255];
-    char * seq;
-    char * pch;
-    bool start,restart,do_mc,do_energy;
-    int itype,ifrag,i,jtype,move,nres;
+    bool start,restart;
+    int itype,ifrag,i,jtype,move;
     double energies[EN_TERMS],etot;
+    memset(this,0,sizeof(*this));
 #if defined(PARALLEL) || defined(EXCHANGE)
     mynod=_mynod;
     numnod=_numnod;
 #endif
-    do_mc=(strcasecmp(command,"run")==0);
-    do_energy=(strcasecmp(command,"energy")==0);
-    /*tables=NULL;
-    en_by_table=NULL;
-    frag_nblist=NULL;*/
-    printf("Reading control file: %s\n",fname);
-    f=fopen(fname,"r");
-    if (f==NULL) {
-        printf("FATAL ERROR: file %s is not found\n",fname);
-        die();
-    }
-    //The force field
-    fgets(buffer,sizeof(buffer),f);
-    sscanf(buffer,"%s %s\n",deffname,forcefieldfname);
-    trim_string(forcefieldfname);
-    printf("Loading parameter file %s.\n",forcefieldfname);
-    ffield = new forcefield(forcefieldfname);
-    trim_string(deffname);
-    printf("Loading definitions file %s.\n",deffname);
-    top = new topology(deffname,ffield);
-/*#ifndef EXCHANGE //otherwise, this will be done in exchange_init
-    if (tables_lambda<0.0) tables_lambda=0.0;
-    if (tables_lambda>1.0) tables_lambda=1.0;
-    //0 = fully exact, 1 = fully tabulated.
-    use_std_tables=(tables_lambda>0.0);
-    if ((tables_lambda>0.0) && (tables_lambda<1.0)) {
-        printf("Will mix exact/tabulated energies in this simulation.  Fraction %.2f exact and %.2f tabulated.\n",(1.0-tables_lambda),tables_lambda);
-    } else if (tables_lambda==0.0) {
-        printf("Will calculate all nonbonded interactions exactly.\n");
-    } else if (tables_lambda==1.0) {
-        printf("Will use noncovalent tables in this simulation.\n");
-    }
-    if (use_cov_tables) printf("Will use covalent tables for peptide groups in this simulation.\n"); else printf("Will calculate all peptide covalent interactions exactly.\n");
-#endif*/
-    //Read the sequence and assemble all the topology info.
-    //For now, read only one chain.  There is support for multiple chains, but need to work on chain "names", etc.
-    //provide support for multiple lines
-    seq=read_multiline(f);
-    printf("Sequence: %s\n",seq);
-    //we need to precount the number of residues so we can set up the all-atom region for residues
-    nres=count_words(seq);
-    aaregion_res.init(nres);
-    fgets(buffer,sizeof(buffer),f);
-    aaregion_res.parse_int_list(buffer);
-    top->add_segment(' ',seq,aaregion_res); //temporary
-    free(seq);
-    //top->link_fragments();
-    top->create_angle_dihedral_lists(false);
-    top->create_non_tab_list(false,&non_tab_list);
-    ffield->find_parameters(top->natom,top->atoms);
-    top->create_improper_dihedral_lists(false,ffield);
-    aaregion_res.print("All atom region residues ");
-#ifdef DEBUG_NON_TABULATED
-    top->print_detailed_info(aaregion_res);
-#else
-    top->print_summary_info();
-#endif
-
-    //Allocate all the coordinate arrays.
-    //oldcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
-    //oldorient=(double *) checkalloc(4*top->nfrag,sizeof(double));
-    oldcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-    //newcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
-    //neworient=(double *) checkalloc(4*top->nfrag,sizeof(double));
-    newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-
-    //if (do_mc) {
-        //Read start/restart and initial structure.
-    fgets(buffer,sizeof(buffer),f);
-    sscanf(buffer,"%s %s %s\n",word,structfname,struct2fname);
+    top=NULL;
+    ffield=NULL;
+    sequence=NULL;
+    memset(ligand_resname,0,sizeof(ligand_resname));
     initcoords=NULL;
-    start=(strncasecmp("START",word,5)==0);
-    restart=(strncasecmp("RESTART",word,7)==0);
-    if (start) {
-        //We're starting from a PDB file.
-        printf("Will read PDB file %s.\n",structfname);
-        initcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-        top->read_pdb_file(structfname,initcoords);
-        //In place of rebuilding the structure from fragments, need to copy the coordinates from initcoords to oldcoords.
-        for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
-        for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
-        /*top->assemble_fragments(initcoords,oldcenter,oldorient,oldcoords);
-        if (strlen(struct2fname)>0) {
-            printf("Writing fitted structure to file %s.\n",struct2fname);
-            top->write_pdb_file(struct2fname,oldcoords);
-        }*/
-        nprevstep=0;
-        /*} else if (restart) {
-            initcoords=NULL;
-#ifdef EXCHANGE
-            snprintf(structf3name,sizeof(structf3name),structfname,mynod+1);//1-based replicas
-            printf("Will read restart file %s.\n",structf3name);
-            read_restart(structf3name);
-#else
-            printf("Will read restart file %s.\n",structfname);
-            read_restart(structfname);
-#endif
-            printf("Number of previous steps: %ld\n",nprevstep);
-            for (ifrag=0; ifrag<top->nfrag; ifrag++) top->update_coords(ifrag,oldcenter,oldorient,oldcoords);
-            if (strlen(struct2fname)>0) {
-                printf("Reading initial coordinates from PDB file %s.\n",struct2fname);
-                initcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-                top->read_pdb_file(struct2fname,initcoords);
-            }*/
-    } else {
-        printf("Must specify start or restart in input file.\n");
-        die();
-    }        //for (ifrag=0; ifrag<top->nfrag; ifrag++) top->copy_frag(ifrag,oldcenter,oldorient,oldcoords,newcenter,neworient,newcoords);
-        //read the rest of MC related parameters
-    if (do_mc) {
-
-    } //end of if (do_mc)
-    fgets(buffer,sizeof(buffer),f);
-    sscanf(buffer,"%d %lg   %lg %lg %lg %d\n",&pbc,&boxsize,&cutoff,&listcutoff,&eps,&rdie);
-    //Create the go model! (Must do this after coordinates are read.)
-    fgets(buffer,sizeof(buffer),f);
-    read_go_params(buffer,&go_params);
-    print_go_params(go_params);
-    go_model = new go_model_info();
-    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,aaregion_res);
-
-    //Create nonbond list object.  Set listcutoff=cutoff or less to disable the nb list.
-    /*use_nb_list=(listcutoff>cutoff);
-    if (use_nb_list) frag_nblist=new fragment_nblist(top->nfrag,listcutoff);*/
-    halfboxsize=boxsize*0.5;
-    cutoff2=cutoff*cutoff;
-    if (pbc) {
-        printf("PBC is on. Box size =      %.2f A\n",boxsize);
-    } else {
-        printf("PBC is off.\n");
-    }
-    if (rdie) {
-        printf("Distance dependent dielectric will be used.\n");
-    }
-    /*if (use_nb_list) {
-        printf("Nonbond list will be used.\n");
-        printf("Spherical/list cutoff         %.2f %.2f\n",cutoff,listcutoff);
-    } else {*/
-        printf("Nonbond list will not be used.\n");
-        printf("Spherical cutoff              %.2f\n",cutoff);
-    //}
-    printf("Dielectric constant:          %.2f\n",eps);
-    //keyword, (relative) probability, and size
-    if (do_mc) {
-     	fgets(buffer,sizeof(buffer),f);
-#ifdef EXCHANGE
-        sscanf(buffer,"%ld %ld %ld %ld %ld %d\n",&nmcstep,&nsave,&nprint,&ncheck,&seed, &enwrite);
-#else
-    	sscanf(buffer,"%ld %ld %ld %ld %lg\n",&nmcstep,&nsave,&nprint,&seed,&mctemp);
-#endif
-    	if (!restart) { //If restarting, we do not reinitialize the random number generator; read_restart put back the state.
-    	   if (seed==0) {
-       	   	seed=time(NULL);
-#ifdef UNIX
-            seed^=getpid(); //To ensure uniqueness even if many are started at same time.
-#endif
-           	printf("Initialized seed based on time.  Seed used is %ld\n",seed);
-    	   } else {
-           	printf("Seed specified in file.  Seed used is %ld\n",seed);
-           }
-    	   init_genrand(seed);
-        }
-        for (i=1; i<=NUM_MOVES; i++) prob[i]=0.0;
-    	for(;;) {
-            fgets(buffer,sizeof(buffer),f);
-            sscanf(buffer,"%s %lg %lg\n",word,&p,&size);
-            move=-1;
-            for (i=1; i<=NUM_MOVES; i++)
-                if (strncasecmp(mc_move_names[i],word,strlen(mc_move_names[i]))==0) move=i;
-            if (move<0) break;
-            prob[move]=p;
-            movesize[move]=size*DEG_TO_RAD;
-       }
-       ptot=0.0;
-       for(i=1;i<=NUM_MOVES;i++)ptot+=prob[i];
-       for(i=1;i<=NUM_MOVES;i++)prob[i]/=ptot;
-       cumprob[1]=prob[1];
-       for(i=2;i<=NUM_MOVES;i++)cumprob[i]=cumprob[i-1]+prob[i];
-       for(i=1;i<=NUM_MOVES;i++)printf("%.10s moves:  Maximum size %.2f degrees  Fraction %.2f%%\n",
-          mc_move_names[i],movesize[i]*RAD_TO_DEG,prob[i]*100.0);
-        top->generate_backbone_moves(&backbone_moves);
-        top->generate_sidechain_moves(&sidechain_moves);
-        top->generate_backrub_moves(&backrub_moves);
-       if ((prob[MOVE_SIDECHAIN]>0) && (sidechain_moves.size()<=0)) {
-           //this usually 
-           printf("You cannot have sidechain moves with an empty AA region.\n");
-           die();
-       }       
-       printf("Number of monte carlo steps: %ld\n",nmcstep);
-       printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
-#ifdef EXCHANGE
-        fflush(stdout);
-        exchange_init(f,fragfmt); //.will read the rest of the input file
-    } //if (do_mc)
-#else
-       printf("Temperature:                 %.2f K\n",mctemp);
-       beta=1/(KBOLTZ*mctemp);
-
-       fgets(buffer,sizeof(buffer),f);
-       sscanf(buffer,"%s %s %s\n",psffname,xyzfname,restartfname);
-       trim_string(psffname);
-       top->write_psf_file(psffname,ffield);
-       trim_string(xyzfname);
-       //trim_string(quatfname);
-       trim_string(restartfname);
-    } //also if (do_mc)
-    //And now... load all the tables.
-    /*if (use_std_tables || enwrite) {
-        fgets(tablefmt,sizeof(tablefmt),f); //A format string for file names.
-        tables = (table * *) checkalloc(top->nfragtypes*top->nfragtypes,sizeof(table *));
-        for (i=0; i<top->nfragtypes*top->nfragtypes; i++) tables[i]=NULL;
-        top->load_tables(tablefmt,fragfmt,tables);
-    } //else tablefmt[0]='\0';
-    if (use_cov_tables || enwrite) {
-        fgets(covtablefmt,sizeof(covtablefmt),f); //A format string for file names.
-        covalent_tables = (covalent_table * *) checkalloc(top->nfragtypes*top->nfragtypes,sizeof(covalent_table *));
-        for (i=0; i<top->nfragtypes*top->nfragtypes; i++) covalent_tables[i]=NULL;
-        top->load_covalent_tables(covtablefmt,covalent_tables);
-    } //else covtablefmt[0]='\0';
-    total_table_size=0.0;
-    if (use_std_tables || enwrite) for (i=0; i<top->nfragtypes*top->nfragtypes; i++) if (tables[i]!=NULL) total_table_size+=tables[i]->getsize();
-    if (use_cov_tables || enwrite) for (i=0; i<top->nfragtypes*top->nfragtypes; i++) if (covalent_tables[i]!=NULL) total_table_size+=covalent_tables[i]->getsize();
-    if (use_std_tables || use_cov_tables || enwrite) printf("Total table size:     %.2f MB\n",total_table_size);
-    if (enwrite) {
-        printf("Will calculate both exact and table-based energies and write them to energy.dat.\n");
-        energy_output=fopen("energy.dat","w");
-        pairs_output=fopen("pairs.pdb","w");
-    }*/
-/*#ifdef DEBUG_NON_TABULATED
-    if (!do_energy) {
-    	total_energy(initcoords,energies,&etot);
-    	print_energies(stdout,true,"init:",0,energies,etot);
-    }
-#endif*/
-    //don't need this anymore, we will do the energies in do_energies
-    if (do_energy) {
-       total_energy(oldcoords,energies,&etot);
-       print_energies(stdout,TRUE,"Energy: ",0,energies,etot);
-    }
-#endif //EXCHANGE
-    fclose(f); //Close control file. We're done with it.
+    oldcoords=NULL;
+    pbc=false;
+    ligand_res = -1;
+    seed = 0;
 }
 
 
@@ -308,7 +75,319 @@ simulation::~simulation()
     delete top;
 }
 
+void simulation::process_commands(char * infname)
+{
+    char command[255],command2[255],fname[255],fmt[255],word[255],word2[255];
+    char * token;
+    const char * delim = " \t\n";
+    char chain;
+    FILE * input;
+    FILE * output;
+    double p,size,ptot,mctemp;
+    int i,move;
+    double energies[EN_TERMS],etot;
+    mctemp=300.0;
+    input=fopen(infname,"r");
+    if (input==NULL) {
+        printf("Could not open command file %s.\n",infname);
+        die();
+    }
+    while (true) {
+        fgets(command,sizeof(command),input);
+        if (feof(input)) break; //end of file
+        //for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
+        printf("Processing command: %s\n",command);
+        //for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
+        strncpy(command2,command,sizeof(command2));
+        token=strtok(command2,delim);
+        if (token==NULL) continue; //blank line
+        else if (*token=='#') continue; //comment
+        else if (strcasecmp("END",token)==0) return; //end of commands
+        else if (strcasecmp("READ",token)==0) { //read a PDB file
+            token=strtok(NULL,delim);
+            strncpy(fmt,token,sizeof(fmt));
+            token=strtok(NULL,delim);
+            strncpy(fname,token,sizeof(fname));
+            if (strcasecmp("DEFS",fmt)==0) {
+                if (top!=NULL) delete top;
+                if (ffield==NULL) {
+                    printf("You need to read a forcefield first.\n");
+                    die();
+                }
+                printf("Loading definitions file %s\n",fname);
+                top = new topology(fname,ffield);
+            } else if (strcasecmp("FFIELD",fmt)==0) {
+                if (ffield!=NULL) delete ffield;
+                printf("Loading forcefield file %s\n",fname);
+                ffield = new forcefield(fname);
+            } else if (strcasecmp("PDB",fmt)==0) {
+                strncpy(structfname,fname,sizeof(structfname));
+            } else {
+                printf("Unrecognized format.\n");
+                die();
+            }
+        } else if (strcasecmp("WRITE",token)==0) { //Fill in coordinates and write a pdb file.
+            token=strtok(NULL,delim);
+            strncpy(fmt,token,sizeof(fmt));
+            token=strtok(NULL,delim);
+            strncpy(fname,token,sizeof(fname));
+            /*if (strcasecmp("PDB",fmt,3)==0) {
+                //for (ifrag=0; ifrag<nfrag; ifrag++) update_coords(ifrag,oldcenter,oldorient,oldcoords);
+                output=fopen(fname,"w");
+                write_frame_pdb(output,0,oldcoords);
+                fclose(output);
+            } else*/ if (strcasecmp("PSF",fmt)==0) {
+                top->write_psf_file(fname,ffield);
+            /*} else if (strcasecmp("REST",fmt)==0) {
+#ifdef EXCHANGE
+                if (strstr(fname,"%d")!=NULL) { //fill in replica number
+                    strncpy(fmt,fname,sizeof(fmt));
+                    snprintf(fname,sizeof(fname),fmt,myrep+1);
+                }
+#endif // EXCHANGE
+                write_restart(0,fname);*/
+            } else {
+                printf("Unrecognized format.\n");
+                die();
+            }
+        } else if (strcasecmp("INSERT",token)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            if (strcasecmp("SEQUENCE",word)==0) {
+                sequence=read_multiline(input);
+                nres=count_words(sequence);
+                if (nres==0) {
+                    printf("You need to specify a sequence first.\n");
+                    die();
+                }
+            } else if (strcasecmp("LIGAND",word)==0) {
+                token=strtok(NULL,delim);
+                strncpy(ligand_resname,token,sizeof(ligand_resname));
+                ligand_res=nres;
+                nres++;
+            } else {
+                printf("Unrecognized command.\n");
+                die();
+            }
+        } else if (strcasecmp("AAREGION",token)==0) {
+            aaregion_res.init(nres);
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            aaregion_res.parse_int_list(word);
+            if (ligand_res>=0) aaregion_res+=ligand_res; //force inclusion of ligand in AA region for docking
+            aaregion_specified = true;
+            create_lists();
+        } else if (strcasecmp("MOVES",token)==0) {
+            for (i=1; i<=NUM_MOVES; i++) prob[i]=0.0;
+            for(;;) {
+                fgets(command,sizeof(command),input);
+                sscanf(command,"%s %lg %lg\n",word,&p,&size);
+		if (strcasecmp("END",word)==0) break;
+                move=-1;
+                for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],word)==0) move=i;
+                if (move<0) break;
+                prob[move]=p;
+                movesize[move]=size*DEG_TO_RAD;
+            }
+            ptot=0.0;
+            for(i=1;i<=NUM_MOVES;i++)ptot+=prob[i];
+            for(i=1;i<=NUM_MOVES;i++)prob[i]/=ptot;
+            cumprob[1]=prob[1];
+            for(i=2;i<=NUM_MOVES;i++)cumprob[i]=cumprob[i-1]+prob[i];
+            for(i=1;i<=NUM_MOVES;i++)printf("%.10s moves:  Maximum size %.2f degrees  Fraction %.2f%%\n",
+                mc_move_names[i],movesize[i]*RAD_TO_DEG,prob[i]*100.0);
+        } else if (strcasecmp("BOXSIZE",token)==0) {
+            pbc=true;
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%lg",&boxsize);
+            halfboxsize=0.5*boxsize;
+        } else if (strncasecmp("CUTOFF",token,6)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%lg",&cutoff);
+            cutoff2=cutoff*cutoff;
+        } else if (strcasecmp("EPS",token)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%lg",&eps);
+        } else if (strcasecmp("SEED",token)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%lu",&seed);
+        } else if (strncasecmp("TEMP",token,4)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%lg",&mctemp);
+            beta=1/(KBOLTZ*mctemp);
+        } else if (strcasecmp("SAVEFREQ",token)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%d",&nsave);
+        } else if (strcasecmp("PRINTFREQ",token)==0) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%d",&nprint);
+        } else if (strncasecmp("TRAJ",token,4)==0) {
+            token=strtok(NULL,delim);
+            strncpy(xyzfname,token,sizeof(xyzfname));
+         } else if (strcasecmp("ENERGY",token)==0) {
+            finish_initialization();
+            total_energy(initcoords,energies,&etot);
+            print_energies(stdout,true,"Energy:",0,energies,etot);
+        } else if ((strcasecmp("RUN",token)==0) || ((strcasecmp("MC",token)==0))) {
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%d",&nmcstep);
+            finish_initialization();
+            mcloop();
+        } else {
+            //check for Go parameters -- see go_model.cpp
+            strncpy(word,token,sizeof(word)); //first word
+            token+=strlen(token)+1;
+            if (read_go_parameter(word,token,&go_params)) {
+            } else {
+                printf("Unrecognized command.\n");
+                die();
+            }
+        } //end of large if..else
+    } //while(true)
+    fclose(input);
+}
 
+void simulation::create_lists(void)
+{
+    aaregion_res.print("All atom region residues ");
+    if ((top==NULL) || (ffield==NULL)) {
+        printf("You need to load the definitions and parameter files first.\n");
+        die();
+    }
+    if (nres<=0) {
+        printf("You need to specify a sequence.\n");
+        die();
+    }
+    /*if (!aaregion_specified) {
+        printf("All atom region not explicitly specified.  By default assuming that all atoms are to be in the all-atom region.\n");
+        aaregion_res.init(nres);
+        for (i=0; i<nres; i++) aaregion_res+=i;
+    }*/
+    //Do we do the below stuff here or in finish_initialization?
+    top->add_segment(' ',sequence,aaregion_res);
+    if (ligand_res>=0) top->add_segment(' ',ligand_resname,aaregion_res);
+    top->create_angle_dihedral_lists(false);
+    top->create_non_tab_list(false,&non_tab_list);
+    ffield->find_parameters(top->natom,top->atoms);
+    top->create_improper_dihedral_lists(false,ffield);
+}
+
+void simulation::finish_initialization(void)
+{
+    int i;
+    if (!aaregion_specified) {
+        printf("All atom region not explicitly specified.  By default assuming that all atoms are to be in the all-atom region.\n");
+        aaregion_res.init(nres);
+        for (i=0; i<nres; i++) aaregion_res+=i;
+        create_lists();
+    }
+
+    aaregion_res.print("All atom region residues ");
+    ligand.init(top->natom);
+    for (i=0; i<top->natom; i++) if (top->atoms[i].resNum==ligand_res) ligand+=i;
+#ifdef DEBUG_NON_TABULATED
+    top->print_detailed_info(aaregion_res);
+#else
+    top->print_summary_info();
+#endif
+    printf("Will read PDB file %s.\n",structfname);
+    initcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+    top->read_pdb_file(structfname,initcoords,ligand_res);
+    //we need to have set up go parameters by now
+    finish_go_params(&go_params);
+    go_model = new go_model_info();
+    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,aaregion_res);
+
+    //Create nonbond list object.  Set listcutoff=cutoff or less to disable the nb list.
+    /*use_nb_list=(listcutoff>cutoff);
+    if (use_nb_list) frag_nblist=new fragment_nblist(top->nfrag,listcutoff);*/
+
+    cutoff2=cutoff*cutoff;
+    if (pbc) {
+        printf("PBC is on. Box size =      %.2f A\n",boxsize);
+    } else {
+        printf("PBC is off.\n");
+    }
+    if (rdie) {
+        printf("Distance dependent dielectric will be used.\n");
+    }
+    /*if (use_nb_list) {
+        printf("Nonbond list will be used.\n");
+        printf("Spherical/list cutoff         %.2f %.2f\n",cutoff,listcutoff);
+    } else {*/
+        printf("Nonbond list will not be used.\n");
+        printf("Spherical cutoff              %.2f\n",cutoff);
+    //}
+    printf("Dielectric constant:          %.2f\n",eps);
+    if (seed==0) {
+       	   	seed=time(NULL);
+#ifdef UNIX
+            seed^=getpid(); //To ensure uniqueness even if many are started at same time.
+#endif
+           	printf("Initialized seed based on time.  Seed used is %ld\n",seed);
+    } else {
+           	printf("Seed specified in file.  Seed used is %ld\n",seed);
+    }
+    init_genrand(seed);
+    top->generate_backbone_moves(&backbone_moves);
+    top->generate_sidechain_moves(&sidechain_moves);
+    top->generate_backrub_moves(&backrub_moves);
+    if ((prob[MOVE_SIDECHAIN]>0) && (sidechain_moves.size()<=0)) {
+        //this usually
+        printf("You cannot have sidechain moves with an empty AA region.\n");
+        die();
+    }
+    printf("Number of monte carlo steps: %ld\n",nmcstep);
+    printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
+
+       //Allocate all the coordinate arrays.
+    //oldcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
+    //oldorient=(double *) checkalloc(4*top->nfrag,sizeof(double));
+    oldcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+    //newcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
+    //neworient=(double *) checkalloc(4*top->nfrag,sizeof(double));
+    newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+    for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
+    for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
+}
+
+
+void simulation::prepare_docking(double trans_size, double rot_size, double * coords)
+{
+    double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand;
+    int iatom,k;
+    for (k=0; k<3; k++) com_aa_region[k]=0.0;
+    for (k=0; k<3; k++) com_ligand[k]=0.0;
+    for (iatom=0; iatom<top->natom; iatom++) {
+        if ((top->atoms[iatom].is_in_aa_region) && (!ligand[iatom])) {
+            mass_aa+=top->atoms[iatom].mass;
+            for (k=0; k<3; k++) com_aa_region[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
+        }
+        if (ligand[iatom]) {
+            mass_ligand+=top->atoms[iatom].mass;
+            for (k=0; k<3; k++) com_ligand[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
+        }
+    }
+    for (k=0; k<3; k++) {
+        com_aa_region[k]/=mass_aa;
+        com_ligand[k]/=mass_ligand;
+        disp[k]=com_ligand[k]-com_aa_region[k];
+    }
+    for (iatom=0; iatom<top->natom; iatom++) if (ligand[iatom]) {
+            for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
+    }
+    //give a random displacement and orientation
+    do_ligand_trans(trans_size,coords);
+    do_ligand_rot(rot_size,coords);
+}
 //Supervises the loading of tables. fmt is a format string with the names of fragments.
 //void simulation::load_tables(char * fmt)
 /*void topology::load_tables(const char * fmt, const char * fragfmt, table * * tables)
@@ -427,7 +506,17 @@ void topology::load_covalent_tables(const char * covtablefmt, covalent_table * *
     if (strcasecmp(type,"rest")==0) {  //Calculate energies from restart file. Needed for replica exchange.
         read_restart(fname);
         for (ifrag=0; ifrag<top->nfrag; ifrag++) top->update_coords(ifrag,oldcenter,oldorient,oldcoords);
-        total_energy(oldcenter,oldorient,oldcoords,energies,&etot);
+        total_energy(oldcenter,oldorient,oldcoords,energies,&etot);{
+    FILE * f;
+    unsigned long seed;
+    double listcutoff;
+    double ptot,mctemp,p,size;
+    double total_table_size;
+    char buffer[255],word[255],tablefmt[255],covtablefmt[255],fragfmt[255],structf3name[255],psffname[255];
+    char * seq;
+    char * pch;
+    bool start,restart;
+    int itype,ifrag,i,jty
         print_energies(stdout,false,"Energy: ",0,energies,etot);
         return;
     }

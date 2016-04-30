@@ -410,7 +410,7 @@ void simulation::mcloop(void)
     //enexactcount=0;
     //entablecount=0;
     //enevalcount=0;
-    minr2=1000.0;
+
     //printf("Step %ld: Cumulative energy = %.4f   Fresh energy = %.4f\n",0,cum_energy,fresh_energy);
 #ifdef __unix__
     getrusage(RUSAGE_SELF,&usage);

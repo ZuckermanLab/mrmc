@@ -15,10 +15,12 @@
 //#include "covalent_tables.h"
 //#include "nblist.h"
 
-#define MOVE_BACKBONE   1
-#define MOVE_SIDECHAIN  2
-#define MOVE_BACKRUB    3
-#define NUM_MOVES       3
+#define MOVE_BACKBONE      1
+#define MOVE_SIDECHAIN     2
+#define MOVE_BACKRUB       3
+#define MOVE_LIGAND_TRANS  4
+#define MOVE_LIGAND_ROT    5
+#define NUM_MOVES          5
 
 
 //For some reason the above include files are not prividing these declarations.
@@ -26,7 +28,7 @@
 //class fragmenttype;
 using std::vector;
 
-static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub"};
+static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand trans","Ligand rot"};
 
 
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
@@ -35,10 +37,11 @@ private:
     //table * * tables; //[MAX_FRAGMENT_TYPES][MAX_FRAGMENT_TYPES];
     //covalent_table * * covalent_tables;
     //use_std_tables, use_cov_tables,
-    bool pbc, interp, enwrite, rdie;
+    bool pbc, interp, enwrite, rdie;//,do_mc,do_energy,do_dock;
     double eps, cutoff, cutoff2, boxsize, halfboxsize, rmargin, tables_lambda;
     char forcefieldfname[255],deffname[255];
     subset aaregion_res, aaregion_atoms;
+    bool aaregion_specified;
     forcefield * ffield;
     go_model_info * go_model;
     go_model_params go_params;
@@ -65,16 +68,19 @@ private:
     vector<mc_move> backrub_moves;
     int startoption;
     topology * top;
+    char * sequence;
+    char ligand_resname[6];
     /*bool use_nb_list;
     fragment_nblist * frag_nblist;*/
     float * xwrite; //the DCD file format requires single precision
     float * ywrite;
     float * zwrite;
-    double minr2;
+    unsigned long int seed;
 
     std::vector<atom_nb_entry> non_tab_list, overlap_list;
-    double * en_by_table;
-
+    //double * en_by_table;
+    subset ligand;
+    int ligand_res,nres; //nres is for temporary use until the topology object can be fully initialized
 #if defined(PARALLEL) || defined(EXCHANGE)
     int mynod, numnod;
     void parallel_start(void);
@@ -89,7 +95,7 @@ private:
     //std::vector<atom_nb_entry> nb_atom_list;
     //double evdw_internal, eelec_internal; //Total internal VDW and electrostatic energies over all the fragments.
     void recenter(void);
-    void mcmove(int * movetype, subset * movedatoms, double * coords);
+    void create_lists(void);
     //void write_frame_xyz(FILE * output, long int istep, double * coords);
     //void write_frame_pdb(FILE * output, long int istep, double * coords);
     void write_pair_pdb(FILE * output, int ifrag, int jfrag, double * coords);
@@ -103,8 +109,14 @@ private:
     void write_restart(long int istep, char * fname);
     void create_nonbond_list(double * center);
     bool check_nb_list(bool * moved, double * center);
+    //MC move support -- these are in mcmoves.cpp
+    void mcmove(int * movetype, subset * movedatoms, double * coords);
     void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
-    //i/o related stuff
+    void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
+    void do_ligand_trans(double movesize, double * coords);
+    void do_ligand_rot(double movesize, double * coords);
+    void prepare_docking(double trans_size, double rot_size, double * coords);
+    //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);
     void print_energies(FILE * output,int hdr, const char * title, long int istep, double * energies, double etot);
@@ -113,11 +125,14 @@ private:
 public:
     void comparison_test(void);
 #if defined(PARALLEL) || defined(EXCHANGE)
-    simulation(const char * command, const char * fname, int _mynod, int _numnod);
+    simulation(int _mynod, int _numnod);
 #else
-    simulation(const char * command, const char * fname);
+    simulation();
 #endif
     ~simulation();
+    void process_commands(char * infname);
+    void prepare_docking(double trans_size, double rot_size);
+    void finish_initialization(void);
     void mcloop(void);
     void fakeloop(void);
     void do_energies(char * type, char * fname,  char * enfname);

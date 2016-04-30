@@ -18,6 +18,8 @@ struct go_model_params {
     int hm,hn; //half of m, half of n
 };
 
+//go_model_params default_go_params = {.m = 12, .n = 10, .hardcore = 1.7, .cutoff = 8.0, .subcutoff = 99, .native_energy = 1.0, .nonnative_energy = 1.0};
+
 /*struct go_model_entry {
     //int ifragatom, jfragatom; //atoms IN FRAGMENT
     int ires, jres;
@@ -50,5 +52,7 @@ public:
 
 //void get_alpha_carbon_list(int itype, fragmenttype * fragtype, int natom, fragmentinfo * fraginfo, int * nlist, int * * list);
 void read_go_params(char * line, go_model_params * params);
+bool read_go_parameter(char * word, char * rest_of_line, go_model_params * params);
+void finish_go_params(go_model_params * params);
 void print_go_params(go_model_params params);
 #endif // go_model_H_INCLUDED

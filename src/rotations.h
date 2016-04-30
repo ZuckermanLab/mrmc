@@ -8,7 +8,7 @@ void fill_trig_tables(void);
 //void prefetch_trig_tables(void);
 void quat_to_euler(const double * q, double * phi, double * theta, double * psi);
 void euler_to_quat(double phi, double theta, double psi, double * q);
-void quat_to_matrix(double * q, double * r);
+void quat_to_matrix(const double * q, double * r);
 void matrix_to_quat(const double r[3][3],double * q);
 void rotate_vector_by_quat(const double * q, const double * v1, double * v2);
 void euler_to_matrix(double phi, double theta, double psi, double * r);

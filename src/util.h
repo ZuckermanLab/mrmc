@@ -106,7 +106,7 @@ public:
         BIT_ENTRY bit=idx&MASK;
         bit=((BIT_ENTRY) 1)<<bit;
         //if ((bits[b])&(1<<bit)) return; //ensures we don't double add edge to connections
-        bits[entry]&=~bit;
+        bits[entry]&=(~bit);
         return *this;
     }
     //set intersection (&=), set removal (/=)

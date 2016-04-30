@@ -149,8 +149,8 @@ struct topology {
     //double covalent_table_energy(double * coords, bool * moved, covalent_table * * covalent_tables);
     //void total_internal_interaction_energy(forcefield * ffield, double eps, int rdie, double * evdw_internal, double * eelec_internal);
     //I/O routines.
-    void read_pdb_stream(FILE * input, double * coords);
-    void read_pdb_file(char * fname, double * coords);
+    void read_pdb_stream(FILE * input, double * coords, int ligand_res);
+    void read_pdb_file(char * fname, double * coords, int ligand_res);
     void write_pdb_file(char * fname, double * coords);
     void write_pqr_file(char * fname, double * coords, int ichargedfrag, forcefield * ffield);
     void write_psf_file(char * fname, forcefield * ffield);
