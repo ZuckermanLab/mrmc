@@ -1,0 +1,136 @@
+% This is a sample LaTeX input file.  (Version of 11 April 1994.)
+%
+% A '%' character causes TeX to ignore all remaining text on the line,
+% and is used for comments like this one.
+
+\documentclass{article}      % Specifies the document class
+
+                             % The preamble begins here.
+\title{How to use the MRMC code}  % Declares the document's title.
+\author{Justin Spiriti}      % Declares the author's name.
+%\date{January 21, 1994}      % Deleting this command produces today's date.
+
+%\newcommand{\ip}[2]{(#1, #2)}
+                             % Defines \ip{arg1}{arg2} to mean
+                             % (arg1, arg2).
+
+%\newcommand{\ip}[2]{\langle #1 | #2\rangle}
+                             % This is an alternative definition of
+                             % \ip that is commented out.
+\setlength{\textwidth}{6.5in}
+\setlength{\textheight}{9in}
+\setlength{\hoffset}{-0.75in}
+\setlength{\voffset}{-1in}
+\usepackage{longtable}
+\begin{document}             % End of preamble and beginning of text.
+
+\maketitle                   % Produces the title.
+
+\section{Form of the potential}
+
+\begin{equation}
+U = U_\mathrm{CG} + U_\mathrm{AA} + U_\mathrm{CG/AA} + U_\mathrm{GB}
+\end{equation}
+
+\begin{eqnarray}
+U_\mathrm{CG} &=& U_\mathrm{bb} + U_\mathrm{G\overline{o}} \\
+U_\mathrm{G\overline{o}} &=& \sum_{i,j} \left\{ 
+\begin{array}{ll}
+\frac{\varepsilon}{1-m/n} \left[\left(\frac{r^0_{ij}}{r_{ij}}\right)^{m}-6\left(\frac{r^0_{ij}}{r_{ij}}\right)^{n}\right] & \textrm{(native contacts)} \\
+\frac{\varepsilon}{1-m/n} \left(\frac{r^\mathrm{HC}}{r_{ij}}\right)^{m}& \textrm{(nonnative contacts)} \\
+%0 \\ \frac{r^0_{ij}}{r_{ij} \lleq 
+\end{array}
+\right. \\ 
+\end{eqnarray}
+
+\section{Input files}
+Here is an example input file:
+\begin{verbatim}
+READ FFIELD amber99sb.prm
+READ DEFS defs-amber99sb.txt
+INSERT SEQUENCE
+        ASNN LEU TYR ILE GLN TRP LEU LYS ASP GLY GLY PRO SER
+        SER GLY ARG PRO PRO PRO SERC
+END
+AAREGION none
+READ PDB 1l2y.pdb
+EPS 1.0
+CUTOFF 99.0
+GO_HARDCORE 1.7
+GO_NATIVE 8.0
+GO_EXPONENTS 12 10
+GO_WELLDEPTH 1.0
+MOVES
+        backbone 0.5 5.0
+        sidechain 0.0 0.0
+        backrub 0.5 5.0
+end
+TEMP 300.0
+WRITE PSF trpcage.psf
+SAVEFREQ 1000
+PRINTFREQ 100000
+TRAJ dcd/trpcage-go-only-1.0.dcd
+RUN 1000000000
+\end{verbatim}
+
+\section{Commands}
+
+All distances, lengths, and radii are in \AA.  The maximum sizes of the moves are in degrees (except for ligand translational moves, which are in \AA).
+
+\begin{longtable}{|l|p{3.25in}|}
+%\begin{tabular}
+\hline
+Command & Description \\
+\hline
+\verb+READ FFIELD filename+ & Read a force field file (Tinker format) \\
+\hline
+\verb+READ DEFS filename+ & Read a definitions file. \\
+\hline
+\verb+READ PDB filename+ & Read a PDB file. (Use after INSERT SEQUENCE and AAREGION commands described below.) \\
+\hline
+\verb+WRITE PSF filename+ & Write a PSF file that can be used for visualizing the trajectory in VMD (see TRAJ command below).  This PSF file should not be used for analysis or simulation in CHARMM or NAMD.  Also, bonds will be missing in the coarse-grained region of the  protein (except for the backbone), although atoms will still be present.  This may result in a strange appearance in VMD. \\ 
+\hline
+\verb+WRITE PDB filename+ & Write a PDB file containing the current coordinates. \\
+\hline
+\verb+INSERT SEQUENCE+ & Add a protein chain to the system with a sequence on subsequent lines.  For proteins with standard termini, the N-terminal and C-terminal amino acids must be labeled with an extra ``N'' or ``C'' `in the sequence as shown above.  The word ``END'' terminates the list of residues. \\
+\hline
+\verb+INSERT LIGAND residue-name+ & Add a ligand with the specified residue to the system.  The ligand residue must be defined in the definitions file.\\
+\hline
+\verb+AAREGION subset+ & Define the all-atom region.  \verb+subset+ may be \verb+none+, \verb+all+, or a list of residue numbers and ranges. \\
+\hline
+\verb+EPS real+& Set the dielectric constant for the electrostatic interaction. \\
+\hline
+\verb+CUTOFF distance+& Set the cutoff (in \AA) for van der Waals and electrostatic interactions. \\
+\hline
+\verb+BOXSIZE length+& Enable cubic periodic boundary conditions and set the box length.  I am not sure about the status of this feature in this code. \\
+\hline
+\verb+GO_HARDCORE radius+ & Set the hard core radius ($r^\mathrm{HC}$ above) in \AA. \\
+\hline 
+\verb+GO_NATIVE distance+ & Set the cutoff distance for determining native contacts in the Go model. \\
+\hline
+\verb+GO_EXPONENTS m n+ & Set the exponents $m$ and $n$ in the Go model. \\
+\hline
+\verb+GO_WELLDEPTH energy+ & Set the well depth $\varepsilon$ of the Go model. \\
+\hline
+\verb+MOVES+ & Introduces section describing Monte Carlo move sizes and mixture.  Each subsequent line names a move type, then gives the fraction of moves of that type and the maximum size.  The list is terminated by END. \\
+\hline
+\verb+TEMP temperature+& Set the temperature in K. \\
+\hline
+\verb+SEED seed+ & Set the random number seed (an unsigned 64-bit integer).  If set to zero or omitted, a random seed will be chosen based on the time. \\
+\hline
+\verb+TRAJ filename+ & Set the filename for writing the trajectory (DCD file format). \\
+\hline
+\verb+SAVEFREQ int+ & Set the frequency for saving frames to the the trajectory. \\
+\hline
+\verb+PRINTFREQ int+ & Set the frequency for printing energies. \\
+\hline
+\verb+DOCKPREP distance angle bond_angle+& Prepare for docking by centering the ligand on the all-atom region and giving it a random translation, rotation, and bond rotation. \\
+\hline
+\verb+ENERGY+ & Compute and output the energy and its terms. \\
+\hline
+\verb+RUN steps+ or \verb+MC steps+ & Run Monte Carlo for the designated number of trial moves. \\
+\hline
+%\end{tabular}
+\end{longtable}
+
+\end{document}               % End of document.
