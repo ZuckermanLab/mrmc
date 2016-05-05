@@ -28,7 +28,7 @@
 //class fragmenttype;
 using std::vector;
 
-static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand trans","Ligand rot"};
+static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-trans","Ligand-rot"};
 
 
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
@@ -41,7 +41,7 @@ private:
     double eps, cutoff, cutoff2, boxsize, halfboxsize, rmargin, tables_lambda;
     char forcefieldfname[255],deffname[255];
     subset aaregion_res, aaregion_atoms;
-    bool aaregion_specified;
+    bool aaregion_specified, initialized;
     forcefield * ffield;
     go_model_info * go_model;
     go_model_params go_params;
@@ -79,8 +79,7 @@ private:
 
     std::vector<atom_nb_entry> non_tab_list, overlap_list;
     //double * en_by_table;
-    subset ligand;
-    int ligand_res,nres; //nres is for temporary use until the topology object can be fully initialized
+    int nres; //nres is for temporary use until the topology object can be fully initialized
 #if defined(PARALLEL) || defined(EXCHANGE)
     int mynod, numnod;
     void parallel_start(void);
@@ -115,7 +114,7 @@ private:
     void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
     void do_ligand_trans(double movesize, double * coords);
     void do_ligand_rot(double movesize, double * coords);
-    void prepare_docking(double trans_size, double rot_size, double * coords);
+    void prepare_docking(double trans_size, double rot_size, double bond_rot_size, double * coords);
     //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);

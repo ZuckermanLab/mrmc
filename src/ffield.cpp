@@ -695,7 +695,7 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
 #ifdef DEBUG
-      printf("Nonbonded interaction: %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
+      printf("Nonbonded interaction (moved): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
 #endif
   }
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST/eps;
@@ -941,7 +941,7 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
 #ifdef DEBUG
-      printf("Nonbonded interaction: %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
+      printf("Nonbonded interaction (total): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
 #endif
   }
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST/eps;

@@ -378,6 +378,15 @@ void simulation::mcloop(void)
     struct sysinfo si;
     struct rlimit as_limit;
 #endif
+    //Allocate all the coordinate arrays.
+    //oldcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
+    //oldorient=(double *) checkalloc(4*top->nfrag,sizeof(double));
+    oldcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+    //newcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
+    //neworient=(double *) checkalloc(4*top->nfrag,sizeof(double));
+    newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+    for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
+    for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
     xyzoutput = fopen(xyzfname,"wb"); //DCD file
     if (xyzoutput==NULL) {
         printf("Could not open DCD trajectory file %s\n",xyzfname);

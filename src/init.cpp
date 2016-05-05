@@ -46,7 +46,8 @@ simulation::simulation(void)
     initcoords=NULL;
     oldcoords=NULL;
     pbc=false;
-    ligand_res = -1;
+    aaregion_specified=false;
+    initialized=false;
     seed = 0;
 }
 
@@ -83,10 +84,12 @@ void simulation::process_commands(char * infname)
     char chain;
     FILE * input;
     FILE * output;
-    double p,size,ptot,mctemp;
+    double p,size,ptot,mctemp, trans_size, rot_size, bond_rot_size;
     int i,move;
+
     double energies[EN_TERMS],etot;
     mctemp=300.0;
+    initialized = false;
     input=fopen(infname,"r");
     if (input==NULL) {
         printf("Could not open command file %s.\n",infname);
@@ -131,12 +134,9 @@ void simulation::process_commands(char * infname)
             strncpy(fmt,token,sizeof(fmt));
             token=strtok(NULL,delim);
             strncpy(fname,token,sizeof(fname));
-            /*if (strcasecmp("PDB",fmt,3)==0) {
-                //for (ifrag=0; ifrag<nfrag; ifrag++) update_coords(ifrag,oldcenter,oldorient,oldcoords);
-                output=fopen(fname,"w");
-                write_frame_pdb(output,0,oldcoords);
-                fclose(output);
-            } else*/ if (strcasecmp("PSF",fmt)==0) {
+            if (strcasecmp("PDB",fmt)==0) {
+                top->write_pdb_file(fname,oldcoords);
+            } else if (strcasecmp("PSF",fmt)==0) {
                 top->write_psf_file(fname,ffield);
             /*} else if (strcasecmp("REST",fmt)==0) {
 #ifdef EXCHANGE
@@ -163,7 +163,7 @@ void simulation::process_commands(char * infname)
             } else if (strcasecmp("LIGAND",word)==0) {
                 token=strtok(NULL,delim);
                 strncpy(ligand_resname,token,sizeof(ligand_resname));
-                ligand_res=nres;
+                top->ligand_res=nres;
                 nres++;
             } else {
                 printf("Unrecognized command.\n");
@@ -174,7 +174,7 @@ void simulation::process_commands(char * infname)
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
             aaregion_res.parse_int_list(word);
-            if (ligand_res>=0) aaregion_res+=ligand_res; //force inclusion of ligand in AA region for docking
+            if (top->ligand_res>=0) aaregion_res+=top->ligand_res; //force inclusion of ligand in AA region for docking
             aaregion_specified = true;
             create_lists();
         } else if (strcasecmp("MOVES",token)==0) {
@@ -182,7 +182,7 @@ void simulation::process_commands(char * infname)
             for(;;) {
                 fgets(command,sizeof(command),input);
                 sscanf(command,"%s %lg %lg\n",word,&p,&size);
-		if (strcasecmp("END",word)==0) break;
+                if (strcasecmp("END",word)==0) break;
                 move=-1;
                 for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],word)==0) move=i;
                 if (move<0) break;
@@ -231,15 +231,23 @@ void simulation::process_commands(char * infname)
         } else if (strncasecmp("TRAJ",token,4)==0) {
             token=strtok(NULL,delim);
             strncpy(xyzfname,token,sizeof(xyzfname));
-         } else if (strcasecmp("ENERGY",token)==0) {
+        } else if (strcasecmp("ENERGY",token)==0) {
             finish_initialization();
             total_energy(initcoords,energies,&etot);
             print_energies(stdout,true,"Energy:",0,energies,etot);
+        } else if (strcasecmp("DOCKPREP",token)==0) {
+	    token+=strlen(token)+1; 
+            strncpy(word,token,sizeof(word)); //entire rest of line		
+            sscanf(word,"%lg %lg %lg",&trans_size, &rot_size, &bond_rot_size);
+            rot_size*=DEG_TO_RAD;
+            bond_rot_size*=DEG_TO_RAD;
+            if (!initialized) finish_initialization();
+            prepare_docking(trans_size,rot_size,bond_rot_size,initcoords);
         } else if ((strcasecmp("RUN",token)==0) || ((strcasecmp("MC",token)==0))) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
             sscanf(word,"%d",&nmcstep);
-            finish_initialization();
+            if (!initialized) finish_initialization();
             mcloop();
         } else {
             //check for Go parameters -- see go_model.cpp
@@ -273,7 +281,7 @@ void simulation::create_lists(void)
     }*/
     //Do we do the below stuff here or in finish_initialization?
     top->add_segment(' ',sequence,aaregion_res);
-    if (ligand_res>=0) top->add_segment(' ',ligand_resname,aaregion_res);
+    if (top->ligand_res>=0) top->add_segment(' ',ligand_resname,aaregion_res);
     top->create_angle_dihedral_lists(false);
     top->create_non_tab_list(false,&non_tab_list);
     ffield->find_parameters(top->natom,top->atoms);
@@ -291,8 +299,9 @@ void simulation::finish_initialization(void)
     }
 
     aaregion_res.print("All atom region residues ");
-    ligand.init(top->natom);
-    for (i=0; i<top->natom; i++) if (top->atoms[i].resNum==ligand_res) ligand+=i;
+    //this really should be done in topology's scope
+    top->ligand.init(top->natom);
+    for (i=0; i<top->natom; i++) if (top->atoms[i].resNum==top->ligand_res) top->ligand+=i;
 #ifdef DEBUG_NON_TABULATED
     top->print_detailed_info(aaregion_res);
 #else
@@ -300,7 +309,7 @@ void simulation::finish_initialization(void)
 #endif
     printf("Will read PDB file %s.\n",structfname);
     initcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-    top->read_pdb_file(structfname,initcoords,ligand_res);
+    top->read_pdb_file(structfname,initcoords);
     //we need to have set up go parameters by now
     finish_go_params(&go_params);
     go_model = new go_model_info();
@@ -327,6 +336,7 @@ void simulation::finish_initialization(void)
         printf("Spherical cutoff              %.2f\n",cutoff);
     //}
     printf("Dielectric constant:          %.2f\n",eps);
+    print_go_params(go_params);
     if (seed==0) {
        	   	seed=time(NULL);
 #ifdef UNIX
@@ -348,45 +358,65 @@ void simulation::finish_initialization(void)
     printf("Number of monte carlo steps: %ld\n",nmcstep);
     printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
 
-       //Allocate all the coordinate arrays.
-    //oldcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
-    //oldorient=(double *) checkalloc(4*top->nfrag,sizeof(double));
-    oldcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-    //newcenter=(double *) checkalloc(3*top->nfrag,sizeof(double));
-    //neworient=(double *) checkalloc(4*top->nfrag,sizeof(double));
-    newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-    for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
-    for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
+
+    initialized=true;
 }
 
 
-void simulation::prepare_docking(double trans_size, double rot_size, double * coords)
+void simulation::prepare_docking(double trans_size, double rot_size, double bond_rot_size, double * coords)
 {
-    double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand;
-    int iatom,k;
+    double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand,x[3],q[4],rmsd;
+    int iatom,k,imove;
+    double angle;
+    double * private_coords;
+    double * weight;
+    private_coords = (double *) checkalloc(3*top->natom,sizeof(double));
+    weight = (double *) checkalloc(top->natom,sizeof(double));
+    printf("Preparing for docking -- random displacement %.2f A, random rotation %.2f deg, random bond rotation %.2f deg\n",
+        trans_size, rot_size*RAD_TO_DEG, bond_rot_size*RAD_TO_DEG);
+    for (iatom=0; iatom<top->natom; iatom++) {
+        //weight is to be used for RMSD analysis of heavy-atom RMSD in ligand.
+        if (top->ligand[iatom] && top->atoms[iatom].atomicNum>1) weight[iatom]=1.0; else weight[iatom]=0.0;
+        for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
+    }
+    //Move the ligand COM to superimpose over the COM of the all-atom region.
     for (k=0; k<3; k++) com_aa_region[k]=0.0;
     for (k=0; k<3; k++) com_ligand[k]=0.0;
     for (iatom=0; iatom<top->natom; iatom++) {
-        if ((top->atoms[iatom].is_in_aa_region) && (!ligand[iatom])) {
+        if ((top->atoms[iatom].is_in_aa_region) && (!top->ligand[iatom])) {
             mass_aa+=top->atoms[iatom].mass;
-            for (k=0; k<3; k++) com_aa_region[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
+            for (k=0; k<3; k++) com_aa_region[k]+=top->atoms[iatom].mass*private_coords[3*iatom+k];
         }
-        if (ligand[iatom]) {
+        if (top->ligand[iatom]) {
             mass_ligand+=top->atoms[iatom].mass;
-            for (k=0; k<3; k++) com_ligand[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
+            for (k=0; k<3; k++) com_ligand[k]+=top->atoms[iatom].mass*private_coords[3*iatom+k];
         }
     }
     for (k=0; k<3; k++) {
         com_aa_region[k]/=mass_aa;
         com_ligand[k]/=mass_ligand;
-        disp[k]=com_ligand[k]-com_aa_region[k];
+        disp[k]=com_aa_region[k]-com_ligand[k];
     }
-    for (iatom=0; iatom<top->natom; iatom++) if (ligand[iatom]) {
-            for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
+    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
+            for (k=0; k<3; k++) private_coords[3*iatom+k]+=disp[k];
     }
     //give a random displacement and orientation
-    do_ligand_trans(trans_size,coords);
-    do_ligand_rot(rot_size,coords);
+    do_ligand_trans(trans_size,private_coords);
+    do_ligand_rot(rot_size,private_coords);
+    //rotate by random extents around rotatable bonds
+    for (imove=0; imove<sidechain_moves.size(); imove++)
+        //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
+        if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
+            angle=(2.0*genrand_real3()-1.0)*bond_rot_size;
+            rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
+        }
+    rmsd_fit(top->natom,weight,private_coords,coords,&x[0],&q[0],&rmsd);
+    printf("Initial ligand RMSD: %.3f\n",rmsd);
+    for (iatom=0; iatom<top->natom; iatom++) {
+        for (k=0; k<3; k++) coords[3*iatom+k]=private_coords[3*iatom+k];
+    }
+    free(private_coords);
+    free(weight);
 }
 //Supervises the loading of tables. fmt is a format string with the names of fragments.
 //void simulation::load_tables(char * fmt)

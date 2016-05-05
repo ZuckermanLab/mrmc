@@ -75,6 +75,7 @@ topology::topology(const char * commandfile, forcefield * ffield)
     iscrot=NULL;
     jscrot=NULL;
     qsystem=0.0;
+    ligand_res=-1;
     /*whichseg=NULL;
     sequence=NULL;*/
     /*itype=0;

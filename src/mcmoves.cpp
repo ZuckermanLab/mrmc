@@ -91,7 +91,7 @@ void topology::generate_backbone_moves(vector<mc_move> * backbone_moves)
     bool is_ace, is_nme;
     //subset phiatoms, psiatoms;
     backbone_moves->clear();
-    for (ires=0; ires<nres; ires++) {
+    for (ires=0; ires<nres; ires++) if (ires!=ligand_res) {
         is_ace=(strcmp(resdef[resinfo[ires].restype].name,"ACE")==0);
         is_nme=(strcmp(resdef[resinfo[ires].restype].name,"NME")==0);
         //need to watch the pointers and copying of objects
@@ -209,7 +209,7 @@ void simulation::do_ligand_trans(double movesize, double * coords)
     } while (m>=1.0);
     for (k=0; k<3; k++) disp[k]*=movesize;
     //translate all ligand atoms
-    for (iatom=0; iatom<top->natom; iatom++) if (ligand[iatom]) {
+    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
     }
 }
@@ -221,14 +221,14 @@ void simulation::do_ligand_rot(double movesize, double * coords)
     //find the center of mass of the ligand.
     totmass=0.0;
     for (k=0; k<3; k++) com[k]=0.0;
-    for (iatom=0; iatom<top->natom; iatom++) if (ligand[iatom]) {
+    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
         mass=top->atoms[iatom].mass;
         for (k=0; k<3; k++) com[k]+=mass*coords[3*iatom+k];
         totmass+=mass;
     }
     for (k=0; k<3; k++) com[k]/=totmass;
     rand_small_quat(movesize,&quat[0]);
-    rotate_atoms_by_point(ligand,&quat[0],&com[0],coords);
+    rotate_atoms_by_point(top->ligand,&quat[0],&com[0],coords);
 }
 
 void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
@@ -260,9 +260,11 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
             break;
         case MOVE_LIGAND_TRANS:
             do_ligand_trans(movesize[MOVE_LIGAND_TRANS],coords);
+	    *movedatoms=top->ligand;
             break;
         case MOVE_LIGAND_ROT:
             do_ligand_rot(movesize[MOVE_LIGAND_ROT],coords);
+            *movedatoms=top->ligand;
             break;
         default:
             printf("Error in switch statement.\n");

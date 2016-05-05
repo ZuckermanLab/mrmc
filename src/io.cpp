@@ -39,7 +39,7 @@ struct dcd_titles {
 //C arrays are zero-based.
 const char * origin = "Produced by Mixed-Resolution Monte Carlo code";
 
-void topology::read_pdb_file(char * fname, double * coords, int ligand_res)
+void topology::read_pdb_file(char * fname, double * coords)
 {
     FILE * f;
     f=fopen(fname,"r");
@@ -47,10 +47,10 @@ void topology::read_pdb_file(char * fname, double * coords, int ligand_res)
         printf("Could not open pdb file %s for reading\n",fname);
         die();
     }
-    read_pdb_stream(f,coords,ligand_res);
+    read_pdb_stream(f,coords);
     fclose(f);
 }
-void topology::read_pdb_stream(FILE * input, double * coords, int ligand_res)
+void topology::read_pdb_stream(FILE * input, double * coords)
 {
     FILE * f;
     char buf[255],buf2[8],aname[6],chain;
@@ -70,10 +70,11 @@ void topology::read_pdb_stream(FILE * input, double * coords, int ligand_res)
         sscanf(buf+22,"%3d",&ires);
         chain=buf[21];
         sscanf(buf+30,"%lf%lf%lf",&x,&y,&z);
+        //Assumes there is only one chain.
         if (strncasecmp("HETATM",buf,6)==0) {
             iatom=find_atom(ligand_res,aname);
         } else {
-            iatom=find_atom(chain,ires,aname);
+            iatom=find_atom(segstart[0]+ires-1,aname);
         }
         if (iatom<0) {
             printf("Could not find atom %c %d %s from PDB file\n",chain,ires,aname);

@@ -182,7 +182,7 @@ double go_model_info::moved_energy(int pbc, double halfboxsize, double boxsize, 
             }*/
                 native_distance2=distances[nres*ires+jres];
                 if (native_distance2<params->cutoff2) a=native_distance2/r2; else a=params->hardcore2/r2;
-                if (a<params->rsubcutoff)  continue; //<1% of native energy
+                //if (a<params->rsubcutoff)  continue; //<1% of native energy
                 an=1;
                 for (iexp=1; iexp<=params->hn; iexp++) an*=a;
                 //an now equals (r/r_nat)^n or (r/r_hc)^n
