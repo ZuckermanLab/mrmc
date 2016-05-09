@@ -63,11 +63,12 @@ simulation::~simulation()
     }
     if (en_by_table!=NULL) free(en_by_table);
     free(tables);*/
+    free(sequence);
     free(initcoords);
-    /*free(oldcoords);
-    free(oldcenter);
-    free(oldorient);
+    free(oldcoords);
     free(newcoords);
+    /*free(oldcenter);
+    free(oldorient);
     free(newcenter);
     free(neworient);*/
     //if (frag_nblist!=NULL) delete frag_nblist;

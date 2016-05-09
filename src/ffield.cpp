@@ -26,6 +26,10 @@ forcefield::forcefield(char * fname)
   double num[12];
   double eps, sigma, sigma3, sigma6, sigma12;
   int mult;
+  for(i=1;i<MAX_NUM_OF_ATOM_CLASSES;i++){       
+     vdwParams[i].epsilon=0;
+     vdwParams[i].sigma=0;
+  }
 
   FILE* fHand;
     if((fHand = fopen(fname,"r"))==NULL){

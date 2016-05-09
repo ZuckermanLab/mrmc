@@ -61,6 +61,7 @@ public:
     inline void init(unsigned long int _n) {
         n=_n;
         nentries=(n>>SHIFT)+1;
+        if (bits!=NULL) free(bits);
         bits = (BIT_ENTRY *) checkalloc(nentries,BIT_ENTRY_SIZE);
         clear();
     }
