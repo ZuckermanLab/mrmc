@@ -25,6 +25,7 @@ void matmul(double * a, double * b, double * c);
 void matmul2(double a[3][3], double b[3][3], double c[3][3]);
 void rand_unif_quat(double *q);
 void rand_small_quat(double delta, double *q);
+void rand_trans_vector(double length, double disp[3]);
 void cart_to_sph(const double * x, const double r, double * sphtheta, double * sphphi);
 void sph_to_cart(double r, double sphtheta, double sphphi, double * x);
 void jacobi(int n, double * a, double * q);

@@ -16,6 +16,7 @@ void fill_string(char * s,size_t size);
 char yesno(int x);
 void strlower(char * s);
 char * read_multiline(FILE * input);
+unsigned long read_random_seed(void);
 int count_words(char * str);
 
 unsigned int digital_crc32(const unsigned char *buf, size_t len);

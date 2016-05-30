@@ -147,6 +147,19 @@ char * read_multiline(FILE * input)
     return seq;
 }
 
+
+
+unsigned long read_random_seed(void)
+{
+    FILE * random;     
+    unsigned long seed;           
+    //use urandom to avoid blocking
+    random=fopen("/dev/urandom","rb");
+    fread(&seed,sizeof(seed),1,random);     
+    fclose(random);
+    return seed;
+}
+
 //used to pre-count the number of residues in order to instantiate the all-atom region early
 //I got this from stackoverflow.com
 int count_words(char * str) {

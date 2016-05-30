@@ -189,16 +189,17 @@ double topology::covalent_table_energy(double * coords, bool * moved, covalent_t
 /*this assumes only one fragment has been moved.*/
 //check nonbond list.  We only need to count interactions between moved and non-moved fragments,
 //since each move is a rigid transformation of the moved fragments.
-void simulation::moved_energy(subset& movedatoms, double * coords, double * energies, double * etot)
+void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, double * energies, double * etot)
 {
     double energy;
     int i,j,jfrag,ifrag;
-
+    bool do_bonds;
     //eold=0.0;
     //for (j=0; j<nfrags; j++)
     //    if (j!=imoved){
+    do_bonds=((movetype==MOVE_HEAVY_TRANS) || (movetype==MOVE_HEAVY_ROT));
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
-    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,non_tab_list.size(),&non_tab_list[0],coords,energies);
+    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,non_tab_list.size(),&non_tab_list[0],coords,energies);
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
@@ -363,7 +364,7 @@ void simulation::mcloop(void)
     long int istep,nacc[NUM_MOVES+1],natt[NUM_MOVES+1];
     int movetype,i,k;
     bool new_nb_list;
-    double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation;
+    double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev;
     double cputime,elapsedtime;
     double oldenergies[EN_TERMS],newenergies[EN_TERMS],cum_energies[EN_TERMS],fresh_energies[EN_TERMS];
     //bool * moved;
@@ -448,7 +449,7 @@ void simulation::mcloop(void)
          mcmove(&movetype,&movedatoms,newcoords);
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
-         moved_energy(movedatoms,oldcoords,oldenergies,&eold);
+         moved_energy(movetype,movedatoms,oldcoords,oldenergies,&eold);
          /*if (use_nb_list) {
 #ifdef TIMERS
              switch_timer(TIMER_NB_LIST);
@@ -466,7 +467,7 @@ void simulation::mcloop(void)
 #endif
          }*/
          //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
-         moved_energy(movedatoms,newcoords,newenergies,&enew);
+         moved_energy(movetype,movedatoms,newcoords,newenergies,&enew);
          de=enew-eold;
          //fresh_energy=total_energy(newcenter,neworient);
          //de2=fresh_energy-cum_energy;
@@ -516,11 +517,20 @@ void simulation::mcloop(void)
              print_energies(stdout,FALSE,"Energy:",istep,fresh_energies,fresh_energy);
              deviation=cum_energy-fresh_energy;
              printf("Energy deviation: %.6f kcal/mol\n",deviation);
-             if (fabs(deviation)>0.001) {
+             //The maximum allowed deviation is 1x10^-6 of the energy or 0.001 kcal/mol, whichever is larger.
+             //This allwos a little slack in case of large energies during docking.
+             maxdev=1e-6*fresh_energy; //this is intentionally without the "fabs", negative energies do not get slack
+             if (maxdev<0.001) maxdev=0.001;
+             if (fabs(deviation)>maxdev) {
                  print_energies(stdout,FALSE,"Cum. energy:",istep,cum_energies,cum_energy);
                  printf("Too much deviation between cumulative and fresh energies.\n");
                  //if (strlen(restartfname)>0) write_restart(nprevstep+istep,restartfname);
                  die();
+             }
+             if (fabs(deviation)>0.001) {
+                 //reset the cumulative energies to ensure that we don't trip the deviation alarm when the energy drops
+                 for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
+                 cum_energy=fresh_energy;
              }
              //printf("Step %ld: Cumulative energy = %.4f   Fresh energy = %.4f Deviation %.4f\n",istep,cum_energy,fresh_energy,cum_energy-fresh_energy);
              for (i=1; i<=NUM_MOVES; i++) {

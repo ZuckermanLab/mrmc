@@ -26,7 +26,7 @@ forcefield::forcefield(char * fname)
   double num[12];
   double eps, sigma, sigma3, sigma6, sigma12;
   int mult;
-  for(i=1;i<MAX_NUM_OF_ATOM_CLASSES;i++){       
+  for(i=1;i<MAX_NUM_OF_ATOM_CLASSES;i++){
      vdwParams[i].epsilon=0;
      vdwParams[i].sigma=0;
   }
@@ -219,7 +219,7 @@ double MLJ(double coefA,double coefB, double r6)
     double ir12 = ir6*ir6;
     double ene =(coefA*ir12 - coefB*ir6);
     //double ene = coefA*ir12;
-    //if(ene > 100000.){return 100000.;}
+    //if(ene > 1000.){return 1000.;}
     return ene;
 
 }
@@ -485,7 +485,7 @@ inline bool term_needed(subset& movedatoms, const int a, const int b, const int 
 //Therefore, we don't need bonds at all, and we only need terms that cross the boundary between moved/unmoved fragments.
 //Also includes all non-tabulated interaction terms.
 //To do: incorporate cutoff into nonbond calculation.
-void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
+void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
 {
   int i,j,k;
   int ij;
@@ -516,7 +516,35 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
 
 
   //printf("bond stretching: %f kcal/mol, the number of interactions: %d\n",engBond,count);
+  //calculate bond energies
+  if (do_bonds) {
+#ifdef TIMERS
+    switch_timer(TIMER_NT_BOND);
+#endif // TIMERS
+    count=0;
+    for(iatom=0;iatom<numOfAtoms;iatom++){
+        for(j=0;j<atoms[iatom].numOfBondedAtoms;j++){
+        jatom = atoms[iatom].bondedAtomList[j];
+        if(jatom>iatom){//avoid double counting bond energies b/c if iatom contains jatom, jatom contains iatom
+            dx = coords[3*jatom]   - coords[3*iatom];
+            dy = coords[3*jatom+1] - coords[3*iatom+1];
+            dz = coords[3*jatom+2] - coords[3*iatom+2];
+            r  = sqrt(dx*dx + dy*dy + dz*dz);
 
+            type = atoms[iatom].bondedParamType[j];
+            K    = bondParams[type].K;
+            r0   = bondParams[type].r0;
+            en = K*(r - r0)*(r - r0);
+            energies[EN_BOND] += en;
+
+#ifdef DEBUG_NON_TABULATED
+            printf("Bond: %d %d  %.10f %.10f\n",iatom,jatom,r,en);
+#endif
+            count++;
+        }
+    }
+    }
+  }
   //calculate bond angle energies
 #ifdef TIMERS
    switch_timer(TIMER_NT_ANGLES);
@@ -1057,7 +1085,7 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
             }
         }
         if (atoms[iatom].angleParamType[num]<0) {
-            printf("Could not find angle parameters for atoms %d %s, %d %s, %d %s  classes %d %d %d\n",atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,  
+            printf("Could not find angle parameters for atoms %d %s, %d %s, %d %s  classes %d %d %d\n",atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,
                 atoms[katom].resNum+1,atoms[katom].name,atoms[iatom].classx,atoms[jatom].classx,atoms[katom].classx);
             die();
         }
@@ -1099,11 +1127,11 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
       }
       if (atoms[i].bonded14DihedParamType[j]<0) {
          printf("Could not find dihedral parameters for atoms %d %s, %d %s, %d %s, %d %s classes %d %d %d %d\n",
-                atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,        
+                atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resNum+1,atoms[jatom].name,
                 atoms[katom].resNum+1,atoms[katom].name,atoms[matom].resNum+1,atoms[matom].name,
                 atoms[iatom].classx,atoms[jatom].classx,atoms[katom].classx,atoms[matom].classx);
          die();
-      }     
+      }
     }
   }
     /*for(j=0;j<atoms[i].numOfBonded14AddAtoms;j++){

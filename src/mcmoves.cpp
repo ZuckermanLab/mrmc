@@ -200,14 +200,7 @@ void simulation::do_ligand_trans(double movesize, double * coords)
     int k,iatom;
     //construct a random vector within the unit sphere, and multiply by movesize
     //to give a random displacement whose magnitude is no more than movesize.
-    do {
-        m=0.0;
-        for (k=0; k<3; k++) {
-            disp[k]=2.0*genrand_real3()-1.0;
-            m+=disp[k]*disp[k];
-        }
-    } while (m>=1.0);
-    for (k=0; k<3; k++) disp[k]*=movesize;
+    rand_trans_vector(movesize,&disp[0]);
     //translate all ligand atoms
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
@@ -229,6 +222,43 @@ void simulation::do_ligand_rot(double movesize, double * coords)
     for (k=0; k<3; k++) com[k]/=totmass;
     rand_small_quat(movesize,&quat[0]);
     rotate_atoms_by_point(top->ligand,&quat[0],&com[0],coords);
+}
+//randomly move a heavy atom, togehter with any hydrogen atoms that may be bonded to it
+void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double * coords)
+{
+    int iatom,iheavy,j,jatom,k;
+    double disp[3];
+    //choose a heavy atom at random
+    for (;;) {
+        iheavy=int(genrand_real3()*top->natom);
+        if (top->atoms[iheavy].is_in_aa_region && top->atoms[iheavy].atomicNum>1) break;
+    }
+    *movedatoms+=iheavy;
+    for (j=0; j<top->atoms[iheavy].numOfBondedAtoms; j++) {
+        jatom=top->atoms[iheavy].bondedAtomList[j];
+        if (top->atoms[jatom].atomicNum>1) *movedatoms+=jatom;
+    }
+    rand_trans_vector(movesize,&disp[0]);
+    for (iatom=0; iatom<top->natom; iatom++) if ((*movedatoms)[iatom]) {
+        for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
+    }
+}
+void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * coords)
+{
+    int iatom,iheavy,j,jatom,k;
+    double q[4];
+    //choose a heavy atom at random
+    for (;;) {
+        iheavy=int(genrand_real3()*top->natom);
+        if (top->atoms[iheavy].is_in_aa_region && top->atoms[iheavy].atomicNum>1) break;
+    }
+    *movedatoms+=iheavy;
+    for (j=0; j<top->atoms[iheavy].numOfBondedAtoms; j++) {
+        jatom=top->atoms[iheavy].bondedAtomList[j];
+        if (top->atoms[jatom].atomicNum>1) *movedatoms+=jatom;
+    }
+    rand_small_quat(movesize,&q[4]);
+    rotate_atoms_by_point(*movedatoms,&q[0],&coords[3*iheavy],coords);
 }
 
 void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
@@ -265,6 +295,12 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
         case MOVE_LIGAND_ROT:
             do_ligand_rot(movesize[MOVE_LIGAND_ROT],coords);
             *movedatoms=top->ligand;
+            break;
+        case MOVE_HEAVY_TRANS:
+            heavy_atom_trans(movedatoms,movesize[MOVE_HEAVY_TRANS],coords);
+            break;
+        case MOVE_HEAVY_ROT:
+            heavy_atom_trans(movedatoms,movesize[MOVE_HEAVY_TRANS],coords);
             break;
         default:
             printf("Error in switch statement.\n");

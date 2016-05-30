@@ -20,7 +20,9 @@
 #define MOVE_BACKRUB       3
 #define MOVE_LIGAND_TRANS  4
 #define MOVE_LIGAND_ROT    5
-#define NUM_MOVES          5
+#define MOVE_HEAVY_TRANS   6
+#define MOVE_HEAVY_ROT     7
+#define NUM_MOVES          7
 
 
 //For some reason the above include files are not prividing these declarations.
@@ -28,7 +30,7 @@
 //class fragmenttype;
 using std::vector;
 
-static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-trans","Ligand-rot"};
+static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-trans","Ligand-rot","Heavy-atom-trans","Heavy-atom-rot"};
 
 
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
@@ -102,7 +104,7 @@ private:
     void write_frame_quat(FILE * output, long int istep, double * center, double * orient);
     void copy_frag(int ifrag, double * center1, double * orient1, double * coords1, double * center2, double * orient2, double * coords2);
     double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
-    void moved_energy(subset& movedatoms, double * coords, double * energies, double * etot);
+    void moved_energy(int movetype,subset& movedatoms, double * coords, double * energies, double * etot);
     void total_energy(double * coords, double * energies, double * etot);
     void read_restart(char * fname);
     void write_restart(long int istep, char * fname);
@@ -114,7 +116,9 @@ private:
     void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
     void do_ligand_trans(double movesize, double * coords);
     void do_ligand_rot(double movesize, double * coords);
-    void prepare_docking(double trans_size, double rot_size, double bond_rot_size, double * coords);
+    void heavy_atom_trans(subset * movedatoms, double movesize, double * coords);
+    void heavy_atom_rot(subset * movedatoms, double movesize, double * coords);
+    void prepare_docking(double trans_size, double rot_size, double bond_rot_size, int nsearch, double * coords);
     //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);

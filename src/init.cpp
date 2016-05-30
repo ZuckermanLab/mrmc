@@ -86,7 +86,7 @@ void simulation::process_commands(char * infname)
     FILE * input;
     FILE * output;
     double p,size,ptot,mctemp, trans_size, rot_size, bond_rot_size;
-    int i,move;
+    int i,move,nsearch;
 
     double energies[EN_TERMS],etot;
     mctemp=300.0;
@@ -99,13 +99,13 @@ void simulation::process_commands(char * infname)
     while (true) {
         fgets(command,sizeof(command),input);
         if (feof(input)) break; //end of file
-        //for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
+        for (i=0; i<strlen(command); i++) if (command[i]=='#') command[i]='\0';
         printf("Processing command: %s\n",command);
         //for (i=0; i<strlen(command); i++) command[i]=toupper(command[i]);
         strncpy(command2,command,sizeof(command2));
         token=strtok(command2,delim);
         if (token==NULL) continue; //blank line
-        else if (*token=='#') continue; //comment
+        //else if (*token=='#') continue; //comment
         else if (strcasecmp("END",token)==0) return; //end of commands
         else if (strcasecmp("READ",token)==0) { //read a PDB file
             token=strtok(NULL,delim);
@@ -188,15 +188,23 @@ void simulation::process_commands(char * infname)
                 for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],word)==0) move=i;
                 if (move<0) break;
                 prob[move]=p;
-                movesize[move]=size*DEG_TO_RAD;
+                movesize[move]=size;
+                if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) movesize[move]*=DEG_TO_RAD;
             }
             ptot=0.0;
             for(i=1;i<=NUM_MOVES;i++)ptot+=prob[i];
             for(i=1;i<=NUM_MOVES;i++)prob[i]/=ptot;
             cumprob[1]=prob[1];
             for(i=2;i<=NUM_MOVES;i++)cumprob[i]=cumprob[i-1]+prob[i];
-            for(i=1;i<=NUM_MOVES;i++)printf("%.10s moves:  Maximum size %.2f degrees  Fraction %.2f%%\n",
-                mc_move_names[i],movesize[i]*RAD_TO_DEG,prob[i]*100.0);
+            for(i=1;i<=NUM_MOVES;i++) {
+               if ((i!=MOVE_LIGAND_TRANS) && (i!=MOVE_HEAVY_TRANS)) {
+                  printf("%.10s moves:  Maximum size %.2f degrees  Fraction %.2f%%\n",
+                      mc_move_names[i],movesize[i]*RAD_TO_DEG,prob[i]*100.0);
+               } else {
+                  printf("%.10s moves:  Maximum size %.2f A  Fraction %.2f%%\n",
+                       mc_move_names[i],movesize[i],prob[i]*100.0);
+               }
+           }
         } else if (strcasecmp("BOXSIZE",token)==0) {
             pbc=true;
             token=strtok(NULL,delim);
@@ -237,13 +245,13 @@ void simulation::process_commands(char * infname)
             total_energy(initcoords,energies,&etot);
             print_energies(stdout,true,"Energy:",0,energies,etot);
         } else if (strcasecmp("DOCKPREP",token)==0) {
-	    token+=strlen(token)+1; 
-            strncpy(word,token,sizeof(word)); //entire rest of line		
-            sscanf(word,"%lg %lg %lg",&trans_size, &rot_size, &bond_rot_size);
+	    token+=strlen(token)+1;
+            strncpy(word,token,sizeof(word)); //entire rest of line
+            sscanf(word,"%lg %lg %lg %d",&trans_size, &rot_size, &bond_rot_size, &nsearch);
             rot_size*=DEG_TO_RAD;
             bond_rot_size*=DEG_TO_RAD;
             if (!initialized) finish_initialization();
-            prepare_docking(trans_size,rot_size,bond_rot_size,initcoords);
+            prepare_docking(trans_size,rot_size,bond_rot_size,nsearch,initcoords);
         } else if ((strcasecmp("RUN",token)==0) || ((strcasecmp("MC",token)==0))) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
@@ -339,11 +347,9 @@ void simulation::finish_initialization(void)
     printf("Dielectric constant:          %.2f\n",eps);
     print_go_params(go_params);
     if (seed==0) {
-       	   	seed=time(NULL);
-#ifdef UNIX
-            seed^=getpid(); //To ensure uniqueness even if many are started at same time.
-#endif
-           	printf("Initialized seed based on time.  Seed used is %ld\n",seed);
+       	   	//seed=time(NULL);
+                seed=read_random_seed();
+           	printf("Initialized seed based on /dev/urandom.  Seed used is %ld\n",seed);
     } else {
            	printf("Seed specified in file.  Seed used is %ld\n",seed);
     }
@@ -364,13 +370,17 @@ void simulation::finish_initialization(void)
 }
 
 
-void simulation::prepare_docking(double trans_size, double rot_size, double bond_rot_size, double * coords)
+void simulation::prepare_docking(double trans_size, double rot_size, double bond_rot_size, int nsearch, double * coords)
 {
     double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand,x[3],q[4],rmsd;
     int iatom,k,imove;
     double angle;
     double * private_coords;
     double * weight;
+    double * private_coords2;
+    double * best_coords;
+    double etot, best_etot, energies[EN_TERMS], best_energies[EN_TERMS];
+    int isearch;
     private_coords = (double *) checkalloc(3*top->natom,sizeof(double));
     weight = (double *) checkalloc(top->natom,sizeof(double));
     printf("Preparing for docking -- random displacement %.2f A, random rotation %.2f deg, random bond rotation %.2f deg\n",
@@ -383,6 +393,8 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
     //Move the ligand COM to superimpose over the COM of the all-atom region.
     for (k=0; k<3; k++) com_aa_region[k]=0.0;
     for (k=0; k<3; k++) com_ligand[k]=0.0;
+    mass_aa=0.0;
+    mass_ligand=0.0;
     for (iatom=0; iatom<top->natom; iatom++) {
         if ((top->atoms[iatom].is_in_aa_region) && (!top->ligand[iatom])) {
             mass_aa+=top->atoms[iatom].mass;
@@ -401,22 +413,43 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
             for (k=0; k<3; k++) private_coords[3*iatom+k]+=disp[k];
     }
-    //give a random displacement and orientation
-    do_ligand_trans(trans_size,private_coords);
-    do_ligand_rot(rot_size,private_coords);
-    //rotate by random extents around rotatable bonds
-    for (imove=0; imove<sidechain_moves.size(); imove++)
-        //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
-        if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
-            angle=(2.0*genrand_real3()-1.0)*bond_rot_size;
-            rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
+    //Begin search for a low-energy ligand conformation
+    printf("Generating %d random ligand conformations to search for a low-energy initial pose.\n",nsearch);
+    private_coords2 = (double *) checkalloc(3*top->natom,sizeof(double));
+    best_coords = (double *) checkalloc(3*top->natom,sizeof(double));
+
+    best_etot=DUMMY_ENERGY; //very high
+    for (isearch=1; isearch<=nsearch; isearch++) {
+        for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords2[3*iatom+k]=private_coords[3*iatom+k];
+        //give a random displacement and orientation
+        do_ligand_trans(trans_size,private_coords2);
+        do_ligand_rot(rot_size,private_coords2);
+        //rotate by random extents around rotatable bonds
+        for (imove=0; imove<sidechain_moves.size(); imove++) {
+            //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
+            if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
+                angle=(2.0*genrand_real3()-1.0)*bond_rot_size;
+                rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords2);
+            }
         }
-    rmsd_fit(top->natom,weight,private_coords,coords,&x[0],&q[0],&rmsd);
+        //check teh energy
+        total_energy(private_coords2,energies,&etot);
+        if (etot<best_etot) {
+            //if lower energy than best so far, save it
+            best_etot=etot;
+            for (k=0; k<EN_TERMS; k++) best_energies[k]=energies[k];
+            for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) best_coords[3*iatom+k]=private_coords2[3*iatom+k];
+        }
+        if (isearch%nprint==0) print_energies(stdout,(isearch==nprint),"Search:",isearch,best_energies,best_etot);
+    }
+    rmsd_fit(top->natom,weight,best_coords,coords,&x[0],&q[0],&rmsd);
     printf("Initial ligand RMSD: %.3f\n",rmsd);
     for (iatom=0; iatom<top->natom; iatom++) {
-        for (k=0; k<3; k++) coords[3*iatom+k]=private_coords[3*iatom+k];
+        for (k=0; k<3; k++) coords[3*iatom+k]=best_coords[3*iatom+k];
     }
     free(private_coords);
+    free(private_coords2);
+    free(best_coords);
     free(weight);
 }
 //Supervises the loading of tables. fmt is a format string with the names of fragments.

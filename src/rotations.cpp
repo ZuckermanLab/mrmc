@@ -430,6 +430,20 @@ void rand_small_quat(double delta, double *q){
   q[3] = qa[3];
   }
 
+void rand_trans_vector(double length, double disp[3])
+{
+    int k;
+    double m;
+    do {
+        m=0.0;
+        for (k=0; k<3; k++) {
+            disp[k]=2.0*genrand_real3()-1.0;
+            m+=disp[k]*disp[k];
+        }
+    } while (m>=1.0);
+    for (k=0; k<3; k++) disp[k]*=length;
+}
+
 void matmul2(double a[3][3], double b[3][3], double c[3][3])
 {
     int i,j,k;
