@@ -59,17 +59,17 @@ CUTOFF 99.0
 GO_HARDCORE 1.7
 GO_NATIVE 8.0
 GO_EXPONENTS 12 10
-GO_WELLDEPTH 1.0
+GO_WELLDEPTH 1.3
 MOVES
-        backbone 0.5 5.0
+        backbone 0.5 30.0
         sidechain 0.0 0.0
-        backrub 0.5 5.0
+        backrub 0.5 30.0
 end
 TEMP 300.0
 WRITE PSF trpcage.psf
 SAVEFREQ 1000
 PRINTFREQ 100000
-TRAJ dcd/trpcage-go-only-1.0.dcd
+TRAJ dcd/trpcage-go-only-1.3.dcd
 RUN 1000000000
 \end{verbatim}
 
@@ -82,7 +82,7 @@ All distances, lengths, and radii are in \AA.  The maximum sizes of the moves ar
 \hline
 Command & Description \\
 \hline
-\verb+READ FFIELD filename+ & Read a force field file (Tinker format) \\
+\verb+READ FFIELD filename+ & Read a force field file (Tinker format).  The force field file should match the force field compiler directive used to compile the program (see below).   \\
 \hline
 \verb+READ DEFS filename+ & Read a definitions file. \\
 \hline
@@ -133,4 +133,11 @@ Command & Description \\
 %\end{tabular}
 \end{longtable}
 
+\section{Compiling the code}
+
+The code may be compiled using the \verb+compile+ script that is provided.  To produce a plain, optimized version of the code, simply invoke the \verb+compile+ script without arguments.  The compilation uses the Intel C++ compiler when compiled on Frank, and the GNU  \verb@g++@ compiler when on Dvorak.
+
+The script takes arguments that indicate conditional compiler directives to be used.  Adding the \verb+debug+ argument creates a debuggable version with disabled optimization that produces lots of extra output.  Adding the \verb+timers+ argument creates a special version that outputs timing data on individual parts of the calculation.
+
+By default the script also applies a conditional compiler directive that selects the force field.  The choices are \verb+AMBER+ and \verb+CHARMM19+.   By default \verb+AMBER+ is applied; this can be changed within the script.    The \verb+CHARMM19+ selection should work, but has not been tested recently.   
 \end{document}               % End of document.
