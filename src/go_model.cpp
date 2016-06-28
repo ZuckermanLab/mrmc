@@ -51,7 +51,7 @@ void finish_go_params(go_model_params * params)
     if (params->nonnative_energy==0) params->nonnative_energy=params->native_energy;
     params->hardcore2=4*params->hardcore*params->hardcore; //hardcore distance = 2 * hardcore radius
     params->cutoff2=params->cutoff*params->cutoff;
-    params->ratio=((double) params->m)/(params->n);
+    if (params->n>0) params->ratio=((double) params->m)/(params->n); else params->ratio=0;
     params->scaled_native_en=-params->native_energy/(1-params->ratio);
     params->scaled_nonnative_en=-params->nonnative_energy/(1-params->ratio);
     params->hn=params->n/2;

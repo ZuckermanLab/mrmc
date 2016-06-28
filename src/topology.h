@@ -153,6 +153,7 @@ struct topology {
     //I/O routines.
     void read_pdb_stream(FILE * input, double * coords);
     void read_pdb_file(char * fname, double * coords);
+    void write_pdb_stream(FILE * output, double * coords);
     void write_pdb_file(char * fname, double * coords);
     void write_pqr_file(char * fname, double * coords, int ichargedfrag, forcefield * ffield);
     void write_psf_file(char * fname, forcefield * ffield);

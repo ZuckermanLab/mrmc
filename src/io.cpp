@@ -63,7 +63,10 @@ void topology::read_pdb_stream(FILE * input, double * coords)
         //if (strncasecmp("ENDMDL",buf,6)==0)
         //Using " sscanf(buf+12,"%4s",aname)  can run into problems when column 17 is occupied and copied into the name.
         strncpy(buf2,buf+12,4);
-        if (buf2[0]==' ') strncpy(buf2,buf+13,4); //for nonstandard pdb files where name is shifted one column
+        if (buf2[0]==' ') {
+	   strncpy(buf2,buf+13,3); //for nonstandard pdb files where name is shifted one column
+           buf2[3]='\0';
+        }
         buf2[4]='\0';
         sscanf(buf2,"%4s",aname);
         aname[4]='\0';
@@ -86,19 +89,12 @@ void topology::read_pdb_stream(FILE * input, double * coords)
     }
 }
 
-void topology::write_pdb_file(char * fname, double * coords)
+void topology::write_pdb_stream(FILE * output, double * coords)
 {
-    FILE * f;
     const char * pdbfmt = "ATOM  %5d %4.4s %3.3s %c%4d    %8.3f%8.3f%8.3f%6.2f%6.2f\n";
     int iatom,ires,iseg,mainfragcount,scfragcount;
     char chain;
     double color;
-    f=fopen(fname,"w");
-    if (f==NULL) {
-        printf("Could not open pdb file %s for writing\n",fname);
-        die();
-    }
-    fprintf(f,"REMARK %s\n",origin);
     mainfragcount=0;
     scfragcount=0;
     for (iatom=0; iatom<natom; iatom++) {
@@ -119,14 +115,26 @@ void topology::write_pdb_file(char * fname, double * coords)
             }
         }
         if (!atoms[iatom].is_backbone) {
-            color=(double) (scfragcount%2) +4.0;
+            color=(double) (scfragcount%2)+4.0;
         } else {
             color=(double) (mainfragcount%2);
 	}
         //indices are zero-based, add 1 to each
-        fprintf(f,pdbfmt,iatom+1,atoms[iatom].name,atoms[iatom].resName,chain,ires+1,
+        fprintf(output,pdbfmt,iatom+1,atoms[iatom].name,atoms[iatom].resName,chain,ires+1,
             coords[3*iatom],coords[3*iatom+1],coords[3*iatom+2],1.0,color);
     }
+}
+
+void topology::write_pdb_file(char * fname, double * coords)
+{
+    FILE * f;
+    f=fopen(fname,"w");
+    if (f==NULL) {
+        printf("Could not open pdb file %s for writing\n",fname);
+        die();
+    }
+    fprintf(f,"REMARK %s\n",origin);
+    write_pdb_stream(f,coords);
     fprintf(f,"END\n");
     fclose(f);
 }

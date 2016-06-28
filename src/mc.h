@@ -50,7 +50,7 @@ private:
     //long int entablecount, enexactcount, enevalcount;
     FILE * energy_output;
     FILE * pairs_output;
-    char structfname[255],struct2fname[255],xyzfname[255],quatfname[255],restartfname[255];
+    char structfname[255],struct2fname[255],xyzfname[255],quatfname[255],restartfname[255],trajfmt[3];
     FILE * xyzoutput;
     FILE * quatoutput;
     double * initcoords;
@@ -118,6 +118,8 @@ private:
     void do_ligand_rot(double movesize, double * coords);
     void heavy_atom_trans(subset * movedatoms, double movesize, double * coords);
     void heavy_atom_rot(subset * movedatoms, double movesize, double * coords);
+    void set_ligand_com(double * desired_com, double * coords);
+    void align_ligand_with_aa_region(double * coords);
     void prepare_docking(double trans_size, double rot_size, double bond_rot_size, int nsearch, double * coords);
     //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
@@ -134,7 +136,7 @@ public:
 #endif
     ~simulation();
     void process_commands(char * infname);
-    void prepare_docking(double trans_size, double rot_size);
+
     void finish_initialization(void);
     void mcloop(void);
     void fakeloop(void);

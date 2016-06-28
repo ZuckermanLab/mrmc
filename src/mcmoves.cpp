@@ -170,11 +170,15 @@ void topology::generate_backrub_moves(vector<mc_move> * backrub_moves)
 
 void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves)
 {
-    int ibond;
+    int ibond,iatom,nligand,n;
     mc_move newmove;
     subset exclude;
+    subset temp;
     sidechain_moves->clear();
     exclude.init(natom);
+    temp.init(natom);
+    nligand=0;
+    for (iatom=0; iatom<natom; iatom++) if (ligand[iatom]) nligand++;
     //We use the rotatable bond information collected while inserting the residues (topology::insert_residue)
     for (ibond=0; ibond<nscrot; ibond++) {
         newmove.iaxis=iscrot[ibond];
@@ -186,6 +190,17 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves)
             exclude+=find_atom(atoms[newmove.iaxis].resNum,"N");
         }
         newmove.movedatoms=follow_bonds(newmove.jaxis,exclude);
+        //If this move involves the ligand, then check to see if it involves more than half the atoms in the ligand.
+        //If so, invert it with respect to the ligand, so that the majority of atoms will not be moved
+        if (ligand[newmove.iaxis] && ligand[newmove.jaxis]) {
+            n=0;
+            for (iatom=0; iatom<natom; iatom++) if (newmove.movedatoms[iatom]) n++;
+            if (n>(nligand/2)) {
+                temp=ligand;
+                temp/=newmove.movedatoms;
+                newmove.movedatoms=temp;
+            }
+        }
         sidechain_moves->push_back(newmove);
 #ifdef DEBUG
         printf("Adding sidechain move:\n");
@@ -236,7 +251,7 @@ void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double *
     *movedatoms+=iheavy;
     for (j=0; j<top->atoms[iheavy].numOfBondedAtoms; j++) {
         jatom=top->atoms[iheavy].bondedAtomList[j];
-        if (top->atoms[jatom].atomicNum>1) *movedatoms+=jatom;
+        if (top->atoms[jatom].atomicNum==1) *movedatoms+=jatom;
     }
     rand_trans_vector(movesize,&disp[0]);
     for (iatom=0; iatom<top->natom; iatom++) if ((*movedatoms)[iatom]) {
@@ -255,7 +270,7 @@ void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * c
     *movedatoms+=iheavy;
     for (j=0; j<top->atoms[iheavy].numOfBondedAtoms; j++) {
         jatom=top->atoms[iheavy].bondedAtomList[j];
-        if (top->atoms[jatom].atomicNum>1) *movedatoms+=jatom;
+        if (top->atoms[jatom].atomicNum==1) *movedatoms+=jatom;
     }
     rand_small_quat(movesize,&q[4]);
     rotate_atoms_by_point(*movedatoms,&q[0],&coords[3*iheavy],coords);

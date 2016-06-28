@@ -85,7 +85,7 @@ void simulation::process_commands(char * infname)
     char chain;
     FILE * input;
     FILE * output;
-    double p,size,ptot,mctemp, trans_size, rot_size, bond_rot_size;
+    double p,size,ptot,mctemp, trans_size, rot_size, bond_rot_size, desired_ligand_com[3];
     int i,move,nsearch;
 
     double energies[EN_TERMS],etot;
@@ -136,7 +136,7 @@ void simulation::process_commands(char * infname)
             token=strtok(NULL,delim);
             strncpy(fname,token,sizeof(fname));
             if (strcasecmp("PDB",fmt)==0) {
-                top->write_pdb_file(fname,oldcoords);
+                top->write_pdb_file(fname,initcoords);
             } else if (strcasecmp("PSF",fmt)==0) {
                 top->write_psf_file(fname,ffield);
             /*} else if (strcasecmp("REST",fmt)==0) {
@@ -156,6 +156,7 @@ void simulation::process_commands(char * infname)
             strncpy(word,token,sizeof(word));
             if (strcasecmp("SEQUENCE",word)==0) {
                 sequence=read_multiline(input);
+		strupper(sequence,strlen(sequence));
                 nres=count_words(sequence);
                 if (nres==0) {
                     printf("You need to specify a sequence first.\n");
@@ -164,6 +165,7 @@ void simulation::process_commands(char * infname)
             } else if (strcasecmp("LIGAND",word)==0) {
                 token=strtok(NULL,delim);
                 strncpy(ligand_resname,token,sizeof(ligand_resname));
+		strupper(ligand_resname,sizeof(ligand_resname));
                 top->ligand_res=nres;
                 nres++;
             } else {
@@ -239,13 +241,29 @@ void simulation::process_commands(char * infname)
             sscanf(word,"%d",&nprint);
         } else if (strncasecmp("TRAJ",token,4)==0) {
             token=strtok(NULL,delim);
+            strncpy(trajfmt,token,sizeof(trajfmt));
+            token=strtok(NULL,delim);
             strncpy(xyzfname,token,sizeof(xyzfname));
+        } else if (strncasecmp("INIT",token,4)==0) {
+            if (!initialized) finish_initialization();
         } else if (strcasecmp("ENERGY",token)==0) {
-            finish_initialization();
+            if (!initialized) finish_initialization();
             total_energy(initcoords,energies,&etot);
             print_energies(stdout,true,"Energy:",0,energies,etot);
+        } else if (strcasecmp("SETLIGANDCOM",token)==0) {
+            //possibilities SETLIGANDCOM real real real or SETLIGANDCOM
+            token+=strlen(token)+1;
+            strncpy(word,token,sizeof(word)); //entire rest of line
+	    if (!initialized) finish_initialization();
+            if (strstr(word,"AAREGION")!=NULL) {
+                printf("Aligning center of mass of ligand with center of mass of AA region.\n");
+                align_ligand_with_aa_region(initcoords);
+            } else {
+                sscanf(word,"%lg %lg %lg",&desired_ligand_com[0],&desired_ligand_com[1],&desired_ligand_com[2]);
+                set_ligand_com(desired_ligand_com,initcoords);
+            }
         } else if (strcasecmp("DOCKPREP",token)==0) {
-	    token+=strlen(token)+1;
+            token+=strlen(token)+1;
             strncpy(word,token,sizeof(word)); //entire rest of line
             sscanf(word,"%lg %lg %lg %d",&trans_size, &rot_size, &bond_rot_size, &nsearch);
             rot_size*=DEG_TO_RAD;
@@ -369,6 +387,40 @@ void simulation::finish_initialization(void)
     initialized=true;
 }
 
+//position the ligand's center of mass
+void simulation::set_ligand_com(double * desired_com, double * coords)
+{
+    double com_ligand[3], mass_ligand, disp[3];
+    int iatom, k;
+    //Move the ligand COM to superimpose over the COM of the all-atom region.
+    for (k=0; k<3; k++) com_ligand[k]=0.0;
+    mass_ligand=0.0;
+    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
+        mass_ligand+=top->atoms[iatom].mass;
+        for (k=0; k<3; k++) com_ligand[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
+    }
+    for (k=0; k<3; k++) com_ligand[k]/=mass_ligand;
+    for (k=0; k<3; k++) disp[k]=desired_com[k]-com_ligand[k];
+    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
+        for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
+    }
+    printf("Set ligand COM to coordinates %.3f %.3f %.3f\n",desired_com[0],desired_com[1],desired_com[2]);
+}
+
+void simulation::align_ligand_with_aa_region(double * coords)
+{
+    double com_aa_region[3], mass_aa;
+    int iatom, k;
+    //Move the ligand COM to superimpose over the COM of the all-atom region.
+    for (k=0; k<3; k++) com_aa_region[k]=0.0;
+    mass_aa=0.0;
+    for (iatom=0; iatom<top->natom; iatom++) if ((top->atoms[iatom].is_in_aa_region) && (!top->ligand[iatom])) {
+        mass_aa+=top->atoms[iatom].mass;
+        for (k=0; k<3; k++) com_aa_region[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
+    }
+    for (k=0; k<3; k++) com_aa_region[k]/=mass_aa;
+    set_ligand_com(com_aa_region,coords);
+}
 
 void simulation::prepare_docking(double trans_size, double rot_size, double bond_rot_size, int nsearch, double * coords)
 {
@@ -377,7 +429,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
     double angle;
     double * private_coords;
     double * weight;
-    double * private_coords2;
+    //double * private_coords2;
     double * best_coords;
     double etot, best_etot, energies[EN_TERMS], best_energies[EN_TERMS];
     int isearch;
@@ -390,55 +442,33 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
         if (top->ligand[iatom] && top->atoms[iatom].atomicNum>1) weight[iatom]=1.0; else weight[iatom]=0.0;
         for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
     }
-    //Move the ligand COM to superimpose over the COM of the all-atom region.
-    for (k=0; k<3; k++) com_aa_region[k]=0.0;
-    for (k=0; k<3; k++) com_ligand[k]=0.0;
-    mass_aa=0.0;
-    mass_ligand=0.0;
-    for (iatom=0; iatom<top->natom; iatom++) {
-        if ((top->atoms[iatom].is_in_aa_region) && (!top->ligand[iatom])) {
-            mass_aa+=top->atoms[iatom].mass;
-            for (k=0; k<3; k++) com_aa_region[k]+=top->atoms[iatom].mass*private_coords[3*iatom+k];
-        }
-        if (top->ligand[iatom]) {
-            mass_ligand+=top->atoms[iatom].mass;
-            for (k=0; k<3; k++) com_ligand[k]+=top->atoms[iatom].mass*private_coords[3*iatom+k];
-        }
-    }
-    for (k=0; k<3; k++) {
-        com_aa_region[k]/=mass_aa;
-        com_ligand[k]/=mass_ligand;
-        disp[k]=com_aa_region[k]-com_ligand[k];
-    }
-    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
-            for (k=0; k<3; k++) private_coords[3*iatom+k]+=disp[k];
-    }
     //Begin search for a low-energy ligand conformation
     printf("Generating %d random ligand conformations to search for a low-energy initial pose.\n",nsearch);
-    private_coords2 = (double *) checkalloc(3*top->natom,sizeof(double));
+    //private_coords2 = (double *) checkalloc(3*top->natom,sizeof(double));
     best_coords = (double *) checkalloc(3*top->natom,sizeof(double));
 
     best_etot=DUMMY_ENERGY; //very high
     for (isearch=1; isearch<=nsearch; isearch++) {
-        for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords2[3*iatom+k]=private_coords[3*iatom+k];
+        //restore coordinates from original
+        for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
         //give a random displacement and orientation
-        do_ligand_trans(trans_size,private_coords2);
-        do_ligand_rot(rot_size,private_coords2);
+        do_ligand_trans(trans_size,private_coords);
+        do_ligand_rot(rot_size,private_coords);
         //rotate by random extents around rotatable bonds
         for (imove=0; imove<sidechain_moves.size(); imove++) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*bond_rot_size;
-                rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords2);
+                rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
             }
         }
         //check teh energy
-        total_energy(private_coords2,energies,&etot);
+        total_energy(private_coords,energies,&etot);
         if (etot<best_etot) {
             //if lower energy than best so far, save it
             best_etot=etot;
             for (k=0; k<EN_TERMS; k++) best_energies[k]=energies[k];
-            for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) best_coords[3*iatom+k]=private_coords2[3*iatom+k];
+            for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) best_coords[3*iatom+k]=private_coords[3*iatom+k];
         }
         if (isearch%nprint==0) print_energies(stdout,(isearch==nprint),"Search:",isearch,best_energies,best_etot);
     }
@@ -448,7 +478,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
         for (k=0; k<3; k++) coords[3*iatom+k]=best_coords[3*iatom+k];
     }
     free(private_coords);
-    free(private_coords2);
+    //free(private_coords2);
     free(best_coords);
     free(weight);
 }
@@ -537,7 +567,7 @@ void topology::load_covalent_tables(const char * covtablefmt, covalent_table * *
                 printf("--------------------------------------------------------------------------------\n");
                 printf("Loading covalent table file %d of %d.\n",count,num_cov_tables);
                 snprintf(fname,sizeof(fname),covtablefmt,fragtypes[itype]->fragname,fragtypes[jtype]->fragname);
-                strlower(fname);
+                strlower(fname,sizeof(fname));
                 trim_string(fname);
                 //ifrag is the lesser fragment type.  Load the table! (Constructor will try both possible names.
                 cov_tables[itype*nfragtypes+jtype]=new covalent_table(fname,false);

@@ -374,6 +374,7 @@ void simulation::mcloop(void)
     clock_t starttime;
     time_t start,end;
     char buffer[255];
+
 #ifdef __unix__
     struct rusage usage;
     struct sysinfo si;
@@ -388,12 +389,19 @@ void simulation::mcloop(void)
     newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
     for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
     for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
-    xyzoutput = fopen(xyzfname,"wb"); //DCD file
-    if (xyzoutput==NULL) {
-        printf("Could not open DCD trajectory file %s\n",xyzfname);
+    if (strcasecmp(trajfmt,"DCD")==0) {
+        xyzoutput=fopen(xyzfname,"wb");
+    } else if (strcasecmp(trajfmt,"PDB")==0) {
+        xyzoutput=fopen(xyzfname,"w");
+    } else {
+        printf("Unrecognized trajectory output format.\n");
         die();
     }
-    write_dcd_header(xyzoutput);
+    if (xyzoutput==NULL) {
+        printf("Could not open trajectory file %s\n",xyzfname);
+        die();
+    }
+    if (strcasecmp(trajfmt,"DCD")==0) write_dcd_header(xyzoutput);
     /*quatoutput = fopen(quatfname,"w");
     if (quatoutput==NULL) {
         printf("Could not open center/orientation file %s\n",quatfname);
@@ -505,7 +513,13 @@ void simulation::mcloop(void)
          //Now, "new" and "old" should be the same again, and on the MC trajectory.
          //Handle saving and printing.
          if ((istep%nsave)==0) {
-             write_dcd_frame(xyzoutput,newcoords);
+             if (strcasecmp(trajfmt,"DCD")==0) {
+                write_dcd_frame(xyzoutput,newcoords);
+             } else if (strcasecmp(trajfmt,"PDB")==0) {
+                fprintf(xyzoutput,"MODEL     %4d\n",istep/nsave);
+                top->write_pdb_stream(xyzoutput,newcoords);
+                fprintf(xyzoutput,"ENDMDL\n");
+             }
              //write_frame_quat(quatoutput,istep,newcenter,neworient);
          }
          if ((istep%nprint)==0) {

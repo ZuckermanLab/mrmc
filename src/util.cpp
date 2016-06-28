@@ -105,11 +105,19 @@ char yesno(int x)
     if (x) return 'Y'; else return 'N';
 }
 
-void strlower(char * s)
+void strupper(char * s, unsigned int max)
 {
     int i;
-    for (i=0; i<strlen(s); i++) s[i]=tolower(s[i]);
+    for (i=0; ((i<=max) && (i<strlen(s))); i++) s[i]=toupper(s[i]);
 }
+
+
+void strlower(char * s, unsigned int max)
+{
+    int i;
+    for (i=0; ((i<=max) && (i<strlen(s))); i++) s[i]=tolower(s[i]);
+}
+
 /*void trim_leading_whitespace(char * s1, char * s2, char * n2)
 {
     char * p;

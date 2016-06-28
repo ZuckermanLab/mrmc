@@ -22,10 +22,10 @@ int topology::frag_type_by_file(const char * fname)
     char tempname[MAX_FRAGMENT_NAME];
     char tempfile[255];
     strncpy(tempfile,fname,sizeof(tempfile));
-    strlower(tempfile);
+    strlower(tempfile,sizeof(tempfile));
     for (itype=0; itype<nfragtypes; itype++) {
         strncpy(tempname,fragtypes[itype]->fragname,sizeof(tempname));
-        strlower(tempname);
+        strlower(tempname,sizeof(tempname));
         if (strstr(tempfile,tempname)!=NULL) return itype;
     }
     return -1;
@@ -101,7 +101,7 @@ topology::topology(const char * commandfile, forcefield * ffield)
             token=strtok(NULL,delim);
             strncpy(name,token,sizeof(name));
             snprintf(fname,sizeof(fname),fragfmt,name);
-            strlower(fname); //the fragment file will be all lowercase
+            strlower(fname,sizeof(fname)); //the fragment file will be all lowercase
             trim_string(fname);
             fragtypes=(fragmenttype **) checkrealloc(fragtypes,nfragtypes+1,sizeof(fragmenttype *));
             fragtypes[nfragtypes]=new fragmenttype(name,fname,ffield);
