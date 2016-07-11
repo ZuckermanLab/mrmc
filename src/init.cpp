@@ -214,9 +214,9 @@ void simulation::process_commands(char * infname)
             sscanf(word,"%lg",&boxsize);
             halfboxsize=0.5*boxsize;
         } else if (strncasecmp("CUTOFF",token,6)==0) {
-            token=strtok(NULL,delim);
+            token+=strlen(token)+1;
             strncpy(word,token,sizeof(word));
-            sscanf(word,"%lg",&cutoff);
+            sscanf(word,"%lg %lg",&cutoff,&listcutoff);
             cutoff2=cutoff*cutoff;
         } else if (strcasecmp("EPS",token)==0) {
             token=strtok(NULL,delim);
@@ -310,7 +310,7 @@ void simulation::create_lists(void)
     top->add_segment(' ',sequence,aaregion_res);
     if (top->ligand_res>=0) top->add_segment(' ',ligand_resname,aaregion_res);
     top->create_angle_dihedral_lists(false);
-    top->create_non_tab_list(false,&non_tab_list);
+    top->create_non_tab_list();
     ffield->find_parameters(top->natom,top->atoms);
     top->create_improper_dihedral_lists(false,ffield);
 }
@@ -347,6 +347,7 @@ void simulation::finish_initialization(void)
     if (use_nb_list) frag_nblist=new fragment_nblist(top->nfrag,listcutoff);*/
 
     cutoff2=cutoff*cutoff;
+    use_nb_list=(listcutoff>cutoff);
     if (pbc) {
         printf("PBC is on. Box size =      %.2f A\n",boxsize);
     } else {
@@ -355,13 +356,13 @@ void simulation::finish_initialization(void)
     if (rdie) {
         printf("Distance dependent dielectric will be used.\n");
     }
-    /*if (use_nb_list) {
+    if (use_nb_list) {
         printf("Nonbond list will be used.\n");
         printf("Spherical/list cutoff         %.2f %.2f\n",cutoff,listcutoff);
-    } else {*/
+    } else {
         printf("Nonbond list will not be used.\n");
         printf("Spherical cutoff              %.2f\n",cutoff);
-    //}
+    }
     printf("Dielectric constant:          %.2f\n",eps);
     print_go_params(go_params);
     if (seed==0) {
@@ -382,8 +383,7 @@ void simulation::finish_initialization(void)
     }
     printf("Number of monte carlo steps: %ld\n",nmcstep);
     printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
-
-
+    if (use_nb_list) update_pair_list_if_needed(0,initcoords);
     initialized=true;
 }
 
@@ -463,6 +463,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
             }
         }
         //check teh energy
+        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,coords);
         total_energy(private_coords,energies,&etot);
         if (etot<best_etot) {
             //if lower energy than best so far, save it

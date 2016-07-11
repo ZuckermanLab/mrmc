@@ -40,7 +40,7 @@ private:
     //covalent_table * * covalent_tables;
     //use_std_tables, use_cov_tables,
     bool pbc, interp, enwrite, rdie;//,do_mc,do_energy,do_dock;
-    double eps, cutoff, cutoff2, boxsize, halfboxsize, rmargin, tables_lambda;
+    double eps, cutoff, cutoff2, listcutoff, boxsize, halfboxsize, rmargin, tables_lambda;
     char forcefieldfname[255],deffname[255];
     subset aaregion_res, aaregion_atoms;
     bool aaregion_specified, initialized;
@@ -72,14 +72,15 @@ private:
     topology * top;
     char * sequence;
     char ligand_resname[6];
-    /*bool use_nb_list;
-    fragment_nblist * frag_nblist;*/
+    bool use_nb_list;
+    std::vector<atom_nb_entry> pair_list;
+    double * last_nb_list_coords;
     float * xwrite; //the DCD file format requires single precision
     float * ywrite;
     float * zwrite;
     unsigned long int seed;
 
-    std::vector<atom_nb_entry> non_tab_list, overlap_list;
+
     //double * en_by_table;
     int nres; //nres is for temporary use until the topology object can be fully initialized
 #if defined(PARALLEL) || defined(EXCHANGE)
@@ -103,9 +104,10 @@ private:
     void read_frame_quat(FILE * input, long int * istep, double * center, double * orient);
     void write_frame_quat(FILE * output, long int istep, double * center, double * orient);
     void copy_frag(int ifrag, double * center1, double * orient1, double * coords1, double * center2, double * orient2, double * coords2);
-    double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
+    //double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
     void moved_energy(int movetype,subset& movedatoms, double * coords, double * energies, double * etot);
     void total_energy(double * coords, double * energies, double * etot);
+    bool update_pair_list_if_needed(long int istep, double * coords);
     void read_restart(char * fname);
     void write_restart(long int istep, char * fname);
     void create_nonbond_list(double * center);

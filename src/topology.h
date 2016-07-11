@@ -115,6 +115,8 @@ struct topology {
     double qsystem;
     subset ligand;
     int ligand_res;
+    std::vector<atom_nb_entry> * orig_pair_list_by_res;
+
     //int * whichseg;
     topology(const char * commandfile, forcefield * ffield);
     ~topology();
@@ -133,7 +135,8 @@ struct topology {
     void link_fragments(void);
     void create_angle_dihedral_lists(bool using_cov_tables);
     void create_improper_dihedral_lists(bool using_cov_tables, forcefield * ffield);
-    void create_non_tab_list(bool using_cov_tables,std::vector<atom_nb_entry> * atom_nb_list);
+    void create_non_tab_list(void);
+    void create_pair_list(bool pbc, double halfboxsize, double boxsize, double listcutoff, std::vector<atom_nb_entry> * pair_list, double * coords);
     bool use_covalent_table(int itype, int jtype);
 /*    bool term_in_covalent_tables(int iatom, int jatom);
     bool term_in_covalent_tables(int iatom, int jatom, int katom);

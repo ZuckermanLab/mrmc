@@ -199,7 +199,7 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
     //    if (j!=imoved){
     do_bonds=((movetype==MOVE_HEAVY_TRANS) || (movetype==MOVE_HEAVY_ROT));
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
-    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,non_tab_list.size(),&non_tab_list[0],coords,energies);
+    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list.size(),&pair_list[0],coords,energies);
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
@@ -238,7 +238,7 @@ void simulation::total_energy( double * coords, double * energies, double * etot
     double energy, inte, evdwint, eelecint;
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
     //if (en_by_table!=NULL) for (itype=0; itype<top->nfragtypes*top->nfragtypes; itype++) en_by_table[itype]=0.0;
-    ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,non_tab_list.size(),&non_tab_list[0],coords,energies);
+    ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,pair_list.size(),&pair_list[0],coords,energies);
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
@@ -458,22 +458,7 @@ void simulation::mcloop(void)
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
          moved_energy(movetype,movedatoms,oldcoords,oldenergies,&eold);
-         /*if (use_nb_list) {
-#ifdef TIMERS
-             switch_timer(TIMER_NB_LIST);
-#endif
-
-             new_nb_list=frag_nblist->check_nb_list(pbc,halfboxsize,boxsize,cutoff,top->nfrag,moved,newcenter);
-            if (new_nb_list) {
-                //printf("New nonbond list at step %ld\n",istep);
-                //if (pbc) recenter();
-                frag_nblist->create_nonbond_list(pbc,halfboxsize,boxsize,top->nfrag,newcenter);
-                //top->create_nb_atom_exact_list(exact,nb_list_per_frag,nb_list_count,nonbond_list,&nb_atom_list);
-            }
-#ifdef TIMERS
-             switch_timer(TIMER_OTHER);
-#endif
-         }*/
+         if (use_nb_list) new_nb_list=update_pair_list_if_needed(istep,newcoords);
          //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
          moved_energy(movetype,movedatoms,newcoords,newenergies,&enew);
          de=enew-eold;
@@ -498,16 +483,7 @@ void simulation::mcloop(void)
                  for (k=0; k<3; k++) newcoords[3*i+k]=oldcoords[3*i+k];
              }
              //If we made a new nonbond list, we now need to get rid of it.  This is duplicative, but avoids the need to manage two nonbond lists.
-             /*if (use_nb_list && new_nb_list) {
-#ifdef TIMERS
-                 switch_timer(TIMER_NB_LIST);
-#endif
-                 frag_nblist->create_nonbond_list(pbc,halfboxsize,boxsize,top->nfrag,newcenter);
-#ifdef TIMERS
-                 switch_timer(TIMER_OTHER);
-#endif
-                 //top->create_nb_atom_exact_list(exact,nb_list_per_frag,nb_list_count,nonbond_list,&nb_atom_list);
-             }*/
+             if (use_nb_list && new_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,oldcoords);
          }
          //check_nb_list(istep);
          //Now, "new" and "old" should be the same again, and on the MC trajectory.

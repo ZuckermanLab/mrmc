@@ -967,12 +967,12 @@ void topology::create_improper_dihedral_lists(bool using_cov_tables, forcefield 
 
 //Creates a list of the pairs of atoms that need to be evaluated exactly, without using the nonbond list.
 //We need to include (and mark) the 1,2 and 1,3 pairs so they will be counted in the GB sum.
-void topology::create_non_tab_list(bool using_cov_tables, std::vector<atom_nb_entry> * atom_nb_list)
+void topology::create_non_tab_list(void)
 {
-    int ifrag,jfrag,j,ii,jj,k,l,m,iatom,jatom,temp;
+    int ifrag,jfrag,j,ii,jj,k,l,m,iatom,jatom,temp,ires,jres;
     bool is12, is13, is14;
     atom_nb_entry newentry;
-    atom_nb_list->clear();
+    //non_tab_list.clear();
     //For every pair of fragments, including interactions between atoms in the same fragment.
     /*for (ifrag=0; ifrag<nfrag; ifrag++)
         for (jfrag=ifrag; jfrag<nfrag; jfrag++) {
@@ -989,7 +989,8 @@ void topology::create_non_tab_list(bool using_cov_tables, std::vector<atom_nb_en
                         iatom=jatom;
                         jatom=temp;
                     }*/
-
+    orig_pair_list_by_res = (std::vector<atom_nb_entry> * ) checkalloc(nres*nres,sizeof(std::vector<atom_nb_entry>));
+    for (ires=0; ires<nres; ires++) for (jres=ires; jres<nres; jres++) orig_pair_list_by_res[ires*nres+jres].clear();
     for (iatom=0; iatom<natom; iatom++)
         for (jatom=iatom+1; jatom<natom; jatom++) {
                     //include in list only if both atoms don't belong to the CG region
@@ -1030,11 +1031,19 @@ void topology::create_non_tab_list(bool using_cov_tables, std::vector<atom_nb_en
                     newentry.jatom=jatom;
                     //newentry.is12_or_13=is12 || is13;
                     newentry.is14=is14;
-                    atom_nb_list->push_back(newentry);
+                    //non_tab_list.push_back(newentry);
+                    ires=atoms[iatom].resNum;
+                    jres=atoms[jatom].resNum;
+                    if (ires>jres) {
+                       temp=ires;
+                       ires=jres;
+                       jres=temp;
+                    }
+                    orig_pair_list_by_res[ires*nres+jres].push_back(newentry);   
                 }
         /*    }
         }*/
-    printf("Number of atom pairs to be evaluated exactly: %ld\n",atom_nb_list->size());
+    //printf("Number of atom pairs to be evaluated exactly: %ld\n",non_tab_list.size());
 }
 
 

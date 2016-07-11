@@ -519,7 +519,7 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   //calculate bond energies
   if (do_bonds) {
 #ifdef TIMERS
-    switch_timer(TIMER_NT_BOND);
+    switch_timer(TIMER_NT_BONDS);
 #endif // TIMERS
     count=0;
     for(iatom=0;iatom<numOfAtoms;iatom++){
@@ -708,7 +708,7 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
     }
   }
 #ifdef TIMERS
-  switch_timer(TIMER_NT_VDW_ELEC);
+  switch_timer(TIMER_NT_PRECUTOFF);
 #endif
   //printf("dihedral: %f kcal/mol, the number of interactions: %d\n",engDihed,count);
   //Calculate all interaction terms that need to be calculated exactly.
@@ -723,11 +723,17 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       dz=coords[3*jatom+2]-coords[3*iatom+2];
       r2=dx*dx+dy*dy+dz*dz;
       if (r2>cutoff2) continue;
+#ifdef TIMERS
+      switch_timer(TIMER_NT_VDW_ELEC);
+#endif
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
 #ifdef DEBUG
       printf("Nonbonded interaction (moved): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
+#endif
+#ifdef TIMERS 
+      switch_timer(TIMER_NT_PRECUTOFF);
 #endif
   }
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST/eps;

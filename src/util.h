@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 //#include <cctype>
 #define MB                          1024*1024
 
@@ -115,7 +116,7 @@ public:
     //set intersection (&=), set removal (/=)
     inline subset& operator &=(const subset& other) {
         //long int minentries = min(nentries,other.nentries);
-        long int minentries=nentries;
+        unsigned long int minentries=nentries;
         if (other.nentries<minentries) minentries=other.nentries;
         for (long int i=0; i<minentries; i++) {
             bits[i]&=other.bits[i];
@@ -125,7 +126,7 @@ public:
     //set union (|=)
     inline subset& operator |=(const subset& other) {
         //long int minentries = min(nentries,other.nentries);
-        long int minentries=nentries;
+        unsigned long int minentries=nentries;
         if (other.nentries<minentries) minentries=other.nentries;
         for (long int i=0; i<minentries; i++) {
             bits[i]|=other.bits[i];
@@ -135,7 +136,7 @@ public:
     //set removal (/=)
     inline subset& operator /=(const subset& other) {
         //long int minentries = min(nentries,other.nentries);
-        long int minentries=nentries;
+        unsigned long int minentries=nentries;
         if (other.nentries<minentries) minentries=other.nentries;
         for (long int i=0; i<minentries; i++) {
             bits[i]&=~other.bits[i];
@@ -178,21 +179,14 @@ public:
 #define TIMER_NT_ANGLES      2
 #define TIMER_NT_DIHEDRALS   3
 #define TIMER_NT_IMPROPERS   4
-#define TIMER_NT_VDW_ELEC    5
+#define TIMER_NT_PRECUTOFF   5
+#define TIMER_NT_VDW_ELEC    6
 //#define TIMER_COV_TABLES     6
-#define TIMER_GO             6
-/*#define TIMER_CHECK_CUTOFF   8
-#define TIMER_INT_EXACT_PREP
-#define TIMER_INT_EXACT      9
-#define TIMER_INT_PREP       10
-#define TIMER_INT_ORIENT     11
-#define TIMER_INT_TRANS      12
-#define TIMER_INT_INDEX      13
-#define TIMER_INT_LOOKUP     14*/
-#define TIMER_INT_OTHER      7
-#define TIMER_NB_LIST        8
-#define TIMER_OTHER          9
-#define NTIMERS              10
+#define TIMER_GO             7
+#define TIMER_INT_OTHER      8
+#define TIMER_NB_LIST        9
+#define TIMER_OTHER          10
+#define NTIMERS              11
 
 struct timer {
     unsigned long long int stop_count;
@@ -202,7 +196,7 @@ struct timer {
 
 static struct timer timers[NTIMERS];
 static volatile int current_timer;
-static const char * timer_names[NTIMERS] = {"MC moves","Bonds","Angles","Dihedrals","Impropers","Non tab. VDW/Elec","Go potential","Other interaction","Nonbond list update","Other"};
+static const char * timer_names[NTIMERS] = {"MC moves","Bonds","Angles","Dihedrals","Impropers","Pre-cutoff","Non tab. VDW/Elec","Go potential","Other interaction","Nonbond list update","Other"};
 
 /*"Backbone tables","Check cutoff",
     "Exact prep","Exact interaction","Table prep","Table orientational","Table translational","Table index calc","Table lookup","Other interaction",*/
