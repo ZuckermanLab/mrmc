@@ -212,7 +212,7 @@ forcefield::forcefield(char * fname)
 }
 
 
-double MLJ(double coefA,double coefB, double r6)
+inline double MLJ(double coefA,double coefB, double r6)
 {
     if (r6==0) return DUMMY_ENERGY;
     double ir6 = 1./r6;
@@ -224,7 +224,7 @@ double MLJ(double coefA,double coefB, double r6)
 
 }
 
-double MCE(double chara,double charb, double rad)
+inline double MCE(double chara,double charb, double rad)
 {
     if (rad==0) return DUMMY_ENERGY;
     //double irad = 1./rad;

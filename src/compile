@@ -9,6 +9,7 @@ if hash CXX 2>/dev/null; then
 	options="-g  -O3 -axAVX -axSSE4.2 -xSSE2" 
 else
 	comp=g++
+	#options="-g -O2"
 	options="-g  -O3 -ffast-math -march=native -mtune=native"
 fi
 name=mrmc
@@ -18,6 +19,10 @@ do
 	symbol=$1
 	name=`echo $name $symbol | awk '{print tolower($1"-"$2)}'`
 	def=`echo $symbol | awk '{print "-D"toupper($0)}'`
+	if [ "$def" == "-DPROF" ]; then
+		options="$options -pg" #gprof output
+		def=""
+	fi
 	if [ "$def" == "-DPARALLEL" ]; then
 		mpi=1
 	fi
@@ -26,7 +31,8 @@ do
 	fi
 	if [ "$def" == "-DDEBUG" ]; then
 		options="-g -O0" #debug mode
-		def="-DDEBUG -DDEBUG_NON_TABULATED"
+		#def="-DDEBUG  -DDEBUG_NON_TABULATED"
+		def=""
 	fi
 	defines="$defines $def"
 	shift

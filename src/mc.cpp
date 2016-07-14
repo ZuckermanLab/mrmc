@@ -189,7 +189,7 @@ double topology::covalent_table_energy(double * coords, bool * moved, covalent_t
 /*this assumes only one fragment has been moved.*/
 //check nonbond list.  We only need to count interactions between moved and non-moved fragments,
 //since each move is a rigid transformation of the moved fragments.
-void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, double * energies, double * etot)
+void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot)
 {
     double energy;
     int i,j,jfrag,ifrag;
@@ -199,11 +199,11 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
     //    if (j!=imoved){
     do_bonds=((movetype==MOVE_HEAVY_TRANS) || (movetype==MOVE_HEAVY_ROT));
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
-    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list.size(),&pair_list[0],coords,energies);
+    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
-    energies[EN_GO]=go_model->moved_energy(pbc,halfboxsize,boxsize,&go_params,top->nres,top->resinfo,aaregion_res,movedatoms,top->natom,coords);
+    energies[EN_GO]=go_model->moved_energy(pbc,halfboxsize,boxsize,&go_params,top->nres,top->resinfo,top->aaregion_res,movedatoms,top->natom,coords);
 /*#ifdef TIMERS
     switch_timer(TIMER_INT_OTHER);
 #endif
@@ -232,17 +232,17 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
 }
 
 //this only works on "new" coordinates.
-void simulation::total_energy( double * coords, double * energies, double * etot)
+void simulation::total_energy( double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot)
 {
     int i,j,itype,jtype;
     double energy, inte, evdwint, eelecint;
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
     //if (en_by_table!=NULL) for (itype=0; itype<top->nfragtypes*top->nfragtypes; itype++) en_by_table[itype]=0.0;
-    ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,pair_list.size(),&pair_list[0],coords,energies);
+    ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,energies);
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
-    energies[EN_GO]=go_model->energy(pbc,halfboxsize,boxsize,&go_params,top->nres,top->resinfo,aaregion_res,top->natom,coords);
+    energies[EN_GO]=go_model->energy(pbc,halfboxsize,boxsize,&go_params,top->nres,top->resinfo,top->aaregion_res,top->natom,coords);
 /*#ifdef TIMERS
     switch_timer(TIMER_INT_OTHER);
 #endif*/
@@ -444,7 +444,8 @@ void simulation::mcloop(void)
 #endif
     printf("Starting Monte Carlo at %s\n",ctime(&start));
     starttime=clock();
-    total_energy(oldcoords,fresh_energies,&fresh_energy);
+    if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,oldcoords);
+    total_energy(oldcoords,&old_pair_list,fresh_energies,&fresh_energy);
     print_energies(stdout,TRUE,"Energy:",0,fresh_energies,fresh_energy);
     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
     cum_energy=fresh_energy;
@@ -457,10 +458,10 @@ void simulation::mcloop(void)
          mcmove(&movetype,&movedatoms,newcoords);
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
-         moved_energy(movetype,movedatoms,oldcoords,oldenergies,&eold);
-         if (use_nb_list) new_nb_list=update_pair_list_if_needed(istep,newcoords);
+         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,oldenergies,&eold);
+         if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,newcoords);
          //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
-         moved_energy(movetype,movedatoms,newcoords,newenergies,&enew);
+         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,newenergies,&enew);
          de=enew-eold;
          //fresh_energy=total_energy(newcenter,neworient);
          //de2=fresh_energy-cum_energy;
@@ -476,15 +477,16 @@ void simulation::mcloop(void)
              for (i=0; i<top->natom; i++) if (movedatoms[i]) {
                  for (k=0; k<3; k++) oldcoords[3*i+k]=newcoords[3*i+k];
              }
+             old_pair_list=new_pair_list;
              //if (de<=-0.5*DUMMY_ENERGY) cum_energy=total_energy(); //This guards against numerical errors related to "declashing."
          } else {
              //REJECTED
              for (i=0; i<top->natom; i++) if (movedatoms[i]) {
                  for (k=0; k<3; k++) newcoords[3*i+k]=oldcoords[3*i+k];
              }
-             //If we made a new nonbond list, we now need to get rid of it.  This is duplicative, but avoids the need to manage two nonbond lists.
-             if (use_nb_list && new_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,oldcoords);
+             new_pair_list=old_pair_list;
          }
+
          //check_nb_list(istep);
          //Now, "new" and "old" should be the same again, and on the MC trajectory.
          //Handle saving and printing.
@@ -503,7 +505,7 @@ void simulation::mcloop(void)
              //fflush(quatoutput);
              //fresh_energy=total_energy();
              //print_energies(FALSE,"Cum: ",istep,cum_energies,cum_energy);
-             total_energy(newcoords,fresh_energies,&fresh_energy);
+             total_energy(newcoords,&new_pair_list,fresh_energies,&fresh_energy);
              print_energies(stdout,FALSE,"Energy:",istep,fresh_energies,fresh_energy);
              deviation=cum_energy-fresh_energy;
              printf("Energy deviation: %.6f kcal/mol\n",deviation);

@@ -42,7 +42,6 @@ private:
     bool pbc, interp, enwrite, rdie;//,do_mc,do_energy,do_dock;
     double eps, cutoff, cutoff2, listcutoff, boxsize, halfboxsize, rmargin, tables_lambda;
     char forcefieldfname[255],deffname[255];
-    subset aaregion_res, aaregion_atoms;
     bool aaregion_specified, initialized;
     forcefield * ffield;
     go_model_info * go_model;
@@ -65,6 +64,8 @@ private:
 
     long int nmcstep, nsave, nprint,ncheck,nprevstep; /*number of MC steps, frequency of saving conformations, frequency of printing*/
     double prob[NUM_MOVES+1],cumprob[NUM_MOVES+1],movesize[NUM_MOVES+1];
+    //This allocates room for parameters for a split distribution.  splitfrac is the fraction of t
+    double splitfrac[NUM_MOVES+1],movesize2[NUM_MOVES+1];
     vector<mc_move> backbone_moves;
     vector<mc_move> sidechain_moves;
     vector<mc_move> backrub_moves;
@@ -73,7 +74,7 @@ private:
     char * sequence;
     char ligand_resname[6];
     bool use_nb_list;
-    std::vector<atom_nb_entry> pair_list;
+    std::vector<atom_nb_entry> old_pair_list,new_pair_list;
     double * last_nb_list_coords;
     float * xwrite; //the DCD file format requires single precision
     float * ywrite;
@@ -105,8 +106,8 @@ private:
     void write_frame_quat(FILE * output, long int istep, double * center, double * orient);
     void copy_frag(int ifrag, double * center1, double * orient1, double * coords1, double * center2, double * orient2, double * coords2);
     //double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
-    void moved_energy(int movetype,subset& movedatoms, double * coords, double * energies, double * etot);
-    void total_energy(double * coords, double * energies, double * etot);
+    void moved_energy(int movetype,subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
+    void total_energy(double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
     bool update_pair_list_if_needed(long int istep, double * coords);
     void read_restart(char * fname);
     void write_restart(long int istep, char * fname);
@@ -116,13 +117,13 @@ private:
     void mcmove(int * movetype, subset * movedatoms, double * coords);
     void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
     void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
-    void do_ligand_trans(double movesize, double * coords);
-    void do_ligand_rot(double movesize, double * coords);
+    void do_ligand_trans(double movesize, double splitfrac, double movesize2, double * coords);
+    void do_ligand_rot(double movesize, double splitfrac, double movesize2, double * coords);
     void heavy_atom_trans(subset * movedatoms, double movesize, double * coords);
     void heavy_atom_rot(subset * movedatoms, double movesize, double * coords);
     void set_ligand_com(double * desired_com, double * coords);
     void align_ligand_with_aa_region(double * coords);
-    void prepare_docking(double trans_size, double rot_size, double bond_rot_size, int nsearch, double * coords);
+    void prepare_docking(double trans_size, double rot_size,  int nsearch, double * coords);
     //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);

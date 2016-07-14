@@ -13,6 +13,7 @@
 void topology::create_pair_list(bool pbc, double halfboxsize, double boxsize, double listcutoff, std::vector<atom_nb_entry> * pair_list, double * coords)
 {
     int iatom, jatom, ires, jres, k, ientry;
+    long int oldsize;
     double d;
     double * res_com;
     double * res_mass;
@@ -46,19 +47,23 @@ void topology::create_pair_list(bool pbc, double halfboxsize, double boxsize, do
     }
     for (ires=0; ires<nres; ires++) res_radius[ires]=sqrt(res_radius[ires]);
     //2. determine close residues and assemble the short list (the original list is kept by residue to make this more efficient
+    //atom pairs are not to be on the pair list unless at least one residue is in the all-atom region
+    oldsize=pair_list->capacity();
     pair_list->clear();
-    for (ires=0; ires<nres; ires++) for (jres=ires; jres<nres; jres++) {
-        if (jres==ires) {
-            d=0;
-        } else { //jres>ires
-            d=sqrt(pbc_distance2(pbc,halfboxsize,boxsize,&res_com[3*ires],&res_com[3*jres]));
-            d=d-res_radius[ires]-res_radius[jres];
+    pair_list->reserve(oldsize);//restore old capacity to avoid having to extend.
+    for (ires=0; ires<nres; ires++) for (jres=ires; jres<nres; jres++)
+        if (aaregion_res[ires] || aaregion_res[jres]) {
+            if (jres==ires) {
+                d=0;
+            } else { //jres>ires
+                d=sqrt(pbc_distance2(pbc,halfboxsize,boxsize,&res_com[3*ires],&res_com[3*jres]));
+                d=d-res_radius[ires]-res_radius[jres];
+            }
+            if (d<listcutoff) {
+                piece_of_list=&orig_pair_list_by_res[ires*nres+jres];
+                pair_list->insert(pair_list->end(),piece_of_list->begin(),piece_of_list->end());
+            }
         }
-        if (d<listcutoff) {
-            piece_of_list=&orig_pair_list_by_res[ires*nres+jres];
-            pair_list->insert(pair_list->end(),piece_of_list->begin(),piece_of_list->end());
-        }
-    }
     //printf("Non bond pair list original entries = %ld, short list = %ld\n",non_tab_list.size(),pair_list->size());
     //clean up
     free(res_com);
@@ -70,7 +75,7 @@ void topology::create_pair_list(bool pbc, double halfboxsize, double boxsize, do
 }
 //(bool pbc, double halfboxsize, double boxsize, double cutoff, int nfrag, bool * moved, double * center)
 
-bool simulation::update_pair_list_if_needed(long int istep, double * coords)
+/*bool simulation::update_pair_list_if_needed(long int istep, double * coords)
 {
     bool redo_nb_list;
     int iatom,k;
@@ -93,4 +98,4 @@ bool simulation::update_pair_list_if_needed(long int istep, double * coords)
         top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,coords);
     }
     return redo_nb_list;
-}
+}*/

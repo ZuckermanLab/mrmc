@@ -327,7 +327,9 @@ void topology::print_summary_info(void)
     printf("Total system charge:                  %.2f\n",qsystem);
 }
 
-void topology::insert_residue(const char * res, subset aaregion_res)
+
+//aaregion_res must be set before calling add_segment or insert_residue.
+void topology::insert_residue(const char * res)
 {
     int nnewfrag,nnewatom,nnewscrot,ifrag,restype,iatom,jatom,ibond,itype,ires,iactualatom,nfragbonded;
     //int fragbonded[6]; //max bonds per atom, should be a constant
@@ -567,7 +569,8 @@ int topology::is_bonded(int ifrag, int jfrag)
 }
 */
 
-void topology::add_segment(char chain, const char * sequence, subset aaregion_res)
+//aaregion_res must be set before calling add_segment or insert_residue.
+void topology::add_segment(char chain, const char * sequence)
 {
     char * token;
     char * buf;
@@ -585,7 +588,7 @@ void topology::add_segment(char chain, const char * sequence, subset aaregion_re
     buf[strlen(sequence)]='\0';
     token=strtok(buf,delim);
     while (token!=NULL) {
-        insert_residue(token,aaregion_res);
+        insert_residue(token);
         token=strtok(NULL,delim);
     }
     segend[nseg]=nres-1;
@@ -1039,7 +1042,7 @@ void topology::create_non_tab_list(void)
                        ires=jres;
                        jres=temp;
                     }
-                    orig_pair_list_by_res[ires*nres+jres].push_back(newentry);   
+                    orig_pair_list_by_res[ires*nres+jres].push_back(newentry);
                 }
         /*    }
         }*/

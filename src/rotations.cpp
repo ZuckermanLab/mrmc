@@ -375,12 +375,12 @@ void rand_unif_quat(double *q){
 }
 
 //the maximum rotation produced by this is delta * pi radians, or delta * 180 degrees
-void rand_small_quat(double delta, double *q){
-  double dot;
+void rand_small_quat(double maxsize, double *q){
+  double delta,dot;
   double alpha,gamma;
   double r,s;
   double qa[4],qb[4];
-
+  delta=maxsize/M_PI; //see above, convert maxsize to units used here
   //set up quaternion corresponding to identity matrix
   qa[0] = 1.0;
   qa[1] = 0;

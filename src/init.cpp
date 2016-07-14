@@ -79,17 +79,18 @@ simulation::~simulation()
 
 void simulation::process_commands(char * infname)
 {
-    char command[255],command2[255],fname[255],fmt[255],word[255],word2[255];
+    char command[255],command2[255],fname[255],fmt[255],word[255],word2[255],unit[255];
     char * token;
     const char * delim = " \t\n";
     char chain;
     FILE * input;
     FILE * output;
-    double p,size,ptot,mctemp, trans_size, rot_size, bond_rot_size, desired_ligand_com[3];
+    double p,size,frac, size2, ptot,mctemp, trans_size, rot_size, bond_rot_size, desired_ligand_com[3],temp;
     int i,move,nsearch;
 
     double energies[EN_TERMS],etot;
     mctemp=300.0;
+    nres=0;
     initialized = false;
     input=fopen(infname,"r");
     if (input==NULL) {
@@ -156,7 +157,7 @@ void simulation::process_commands(char * infname)
             strncpy(word,token,sizeof(word));
             if (strcasecmp("SEQUENCE",word)==0) {
                 sequence=read_multiline(input);
-		strupper(sequence,strlen(sequence));
+                strupper(sequence,strlen(sequence));
                 nres=count_words(sequence);
                 if (nres==0) {
                     printf("You need to specify a sequence first.\n");
@@ -165,7 +166,7 @@ void simulation::process_commands(char * infname)
             } else if (strcasecmp("LIGAND",word)==0) {
                 token=strtok(NULL,delim);
                 strncpy(ligand_resname,token,sizeof(ligand_resname));
-		strupper(ligand_resname,sizeof(ligand_resname));
+                strupper(ligand_resname,sizeof(ligand_resname));
                 top->ligand_res=nres;
                 nres++;
             } else {
@@ -173,39 +174,82 @@ void simulation::process_commands(char * infname)
                 die();
             }
         } else if (strcasecmp("AAREGION",token)==0) {
-            aaregion_res.init(nres);
+            if ((top==NULL) || (nres==0)) {
+                printf("You must load a definitions file and insert a sequence first.\n");
+                die();
+            }
+            top->aaregion_res.init(nres);
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
-            aaregion_res.parse_int_list(word);
-            if (top->ligand_res>=0) aaregion_res+=top->ligand_res; //force inclusion of ligand in AA region for docking
+            top->aaregion_res.parse_int_list(word);
+            if (top->ligand_res>=0) top->aaregion_res+=top->ligand_res; //force inclusion of ligand in AA region for docking
             aaregion_specified = true;
             create_lists();
         } else if (strcasecmp("MOVES",token)==0) {
-            for (i=1; i<=NUM_MOVES; i++) prob[i]=0.0;
+            for (i=1; i<=NUM_MOVES; i++) {
+                prob[i]=0.0;
+                movesize[i]=0.0;
+                splitfrac[i]=0.0;
+                movesize2[i]=0.0;
+            }
             for(;;) {
                 fgets(command,sizeof(command),input);
-                sscanf(command,"%s %lg %lg\n",word,&p,&size);
-                if (strcasecmp("END",word)==0) break;
+                strncpy(command2,command,sizeof(command2));//This prevents parsing of the original command.
+                token=strtok(command2,delim);
+                if (token==NULL) continue; //blank line
+                if (strcasecmp("END",token)==0) break;
                 move=-1;
-                for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],word)==0) move=i;
+                for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],token)==0) move=i;
                 if (move<0) break;
-                prob[move]=p;
-                movesize[move]=size;
-                if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) movesize[move]*=DEG_TO_RAD;
+                token+=strlen(token)+1;
+                if ((move==MOVE_LIGAND_TRANS) || (move==MOVE_LIGAND_ROT)) {
+                    sscanf(command,"%s %lg %lg %lg %lg\n",word,&p,&size,&frac,&size2);
+                    prob[move]=p;
+                    movesize[move]=size;
+                    splitfrac[move]=frac;
+                    movesize2[move]=size2;
+                    if (movesize2[move]<movesize[move]) {
+                        temp=movesize2[move];
+                        movesize2[move]=movesize[move];
+                        movesize[move]=temp;
+                        splitfrac[move]=1-splitfrac[move];
+                    }
+                } else {
+                    sscanf(command,"%s %lg %lg\n",word,&p,&size);
+                    prob[move]=p;
+                    movesize[move]=size;
+                }
+                //at this point movesize is in degrees if an angular type move.
+
+                //if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) movesize[move]*=DEG_TO_RAD;
             }
             ptot=0.0;
-            for(i=1;i<=NUM_MOVES;i++)ptot+=prob[i];
-            for(i=1;i<=NUM_MOVES;i++)prob[i]/=ptot;
+            for(move=1;move<=NUM_MOVES;move++)ptot+=prob[move];
+            for(move=1;move<=NUM_MOVES;move++)prob[move]/=ptot;
             cumprob[1]=prob[1];
-            for(i=2;i<=NUM_MOVES;i++)cumprob[i]=cumprob[i-1]+prob[i];
-            for(i=1;i<=NUM_MOVES;i++) {
-               if ((i!=MOVE_LIGAND_TRANS) && (i!=MOVE_HEAVY_TRANS)) {
-                  printf("%.10s moves:  Maximum size %.2f degrees  Fraction %.2f%%\n",
-                      mc_move_names[i],movesize[i]*RAD_TO_DEG,prob[i]*100.0);
-               } else {
-                  printf("%.10s moves:  Maximum size %.2f A  Fraction %.2f%%\n",
-                       mc_move_names[i],movesize[i],prob[i]*100.0);
-               }
+            for(move=2;move<=NUM_MOVES;move++)cumprob[move]=cumprob[move-1]+prob[move];
+            for(move=1;move<=NUM_MOVES;move++) {
+                if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
+                    //strncpy(unit,"degrees\0",sizeof(unit));
+                    movesize[move]*=DEG_TO_RAD;
+                    movesize2[move]*=DEG_TO_RAD;
+                    if (move==MOVE_LIGAND_ROT) {
+                        printf("%.20s moves:  Maximum size %.2f degrees  Overall fraction %.2f%% Smaller distribution size %.2f degrees Split fraction %.2f%%\n",
+                            mc_move_names[move],movesize2[move]*RAD_TO_DEG,prob[move]*100.0,movesize[move]*RAD_TO_DEG,splitfrac[move]*100.0);
+                    } else {
+                        printf("%.20s moves:  Maximum size %.2f degrees  Overall fraction %.2f%%\n",
+                            mc_move_names[move],movesize[move]*RAD_TO_DEG,prob[move]*100.0);
+                    }
+                } else {
+                    //strncpy(unit,"A\0",sizeof(unit);
+                    if (move==MOVE_LIGAND_TRANS) {
+                        printf("%.20s moves:  Maximum size %.2f A  Overall fraction %.2f%% Smaller distribution size %.2f A Split fraction %.2f%%\n",
+                            mc_move_names[move],movesize2[move],prob[move]*100.0,movesize[move],splitfrac[move]*100.0);
+                    } else {
+                        printf("%.20s moves:  Maximum size %.2f degrees  Overall fraction %.2f%%\n",
+                            mc_move_names[move],movesize[move],prob[move]*100.0);
+                    }
+                }
            }
         } else if (strcasecmp("BOXSIZE",token)==0) {
             pbc=true;
@@ -248,7 +292,8 @@ void simulation::process_commands(char * infname)
             if (!initialized) finish_initialization();
         } else if (strcasecmp("ENERGY",token)==0) {
             if (!initialized) finish_initialization();
-            total_energy(initcoords,energies,&etot);
+            top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);
+            total_energy(initcoords,&old_pair_list,energies,&etot);
             print_energies(stdout,true,"Energy:",0,energies,etot);
         } else if (strcasecmp("SETLIGANDCOM",token)==0) {
             //possibilities SETLIGANDCOM real real real or SETLIGANDCOM
@@ -265,11 +310,10 @@ void simulation::process_commands(char * infname)
         } else if (strcasecmp("DOCKPREP",token)==0) {
             token+=strlen(token)+1;
             strncpy(word,token,sizeof(word)); //entire rest of line
-            sscanf(word,"%lg %lg %lg %d",&trans_size, &rot_size, &bond_rot_size, &nsearch);
+            sscanf(word,"%lg %lg %d",&trans_size, &rot_size, &nsearch);
             rot_size*=DEG_TO_RAD;
-            bond_rot_size*=DEG_TO_RAD;
             if (!initialized) finish_initialization();
-            prepare_docking(trans_size,rot_size,bond_rot_size,nsearch,initcoords);
+            prepare_docking(trans_size,rot_size,nsearch,initcoords);
         } else if ((strcasecmp("RUN",token)==0) || ((strcasecmp("MC",token)==0))) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
@@ -292,7 +336,7 @@ void simulation::process_commands(char * infname)
 
 void simulation::create_lists(void)
 {
-    aaregion_res.print("All atom region residues ");
+    top->aaregion_res.print("All atom region residues ");
     if ((top==NULL) || (ffield==NULL)) {
         printf("You need to load the definitions and parameter files first.\n");
         die();
@@ -307,8 +351,8 @@ void simulation::create_lists(void)
         for (i=0; i<nres; i++) aaregion_res+=i;
     }*/
     //Do we do the below stuff here or in finish_initialization?
-    top->add_segment(' ',sequence,aaregion_res);
-    if (top->ligand_res>=0) top->add_segment(' ',ligand_resname,aaregion_res);
+    top->add_segment(' ',sequence);
+    if (top->ligand_res>=0) top->add_segment(' ',ligand_resname);
     top->create_angle_dihedral_lists(false);
     top->create_non_tab_list();
     ffield->find_parameters(top->natom,top->atoms);
@@ -320,12 +364,12 @@ void simulation::finish_initialization(void)
     int i;
     if (!aaregion_specified) {
         printf("All atom region not explicitly specified.  By default assuming that all atoms are to be in the all-atom region.\n");
-        aaregion_res.init(nres);
-        for (i=0; i<nres; i++) aaregion_res+=i;
+        top->aaregion_res.init(nres);
+        for (i=0; i<nres; i++) top->aaregion_res+=i;
         create_lists();
     }
 
-    aaregion_res.print("All atom region residues ");
+    top->aaregion_res.print("All atom region residues ");
     //this really should be done in topology's scope
     top->ligand.init(top->natom);
     for (i=0; i<top->natom; i++) if (top->atoms[i].resNum==top->ligand_res) top->ligand+=i;
@@ -340,14 +384,16 @@ void simulation::finish_initialization(void)
     //we need to have set up go parameters by now
     finish_go_params(&go_params);
     go_model = new go_model_info();
-    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,aaregion_res);
+    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,top->aaregion_res);
 
     //Create nonbond list object.  Set listcutoff=cutoff or less to disable the nb list.
     /*use_nb_list=(listcutoff>cutoff);
     if (use_nb_list) frag_nblist=new fragment_nblist(top->nfrag,listcutoff);*/
 
     cutoff2=cutoff*cutoff;
-    use_nb_list=(listcutoff>cutoff);
+    //use_nb_list=(listcutoff>cutoff);
+    use_nb_list=true;
+    if (listcutoff<cutoff) listcutoff=cutoff;
     if (pbc) {
         printf("PBC is on. Box size =      %.2f A\n",boxsize);
     } else {
@@ -356,21 +402,21 @@ void simulation::finish_initialization(void)
     if (rdie) {
         printf("Distance dependent dielectric will be used.\n");
     }
-    if (use_nb_list) {
+    //if (use_nb_list) {
         printf("Nonbond list will be used.\n");
         printf("Spherical/list cutoff         %.2f %.2f\n",cutoff,listcutoff);
-    } else {
+    /*} else {
         printf("Nonbond list will not be used.\n");
         printf("Spherical cutoff              %.2f\n",cutoff);
-    }
+    }*/
     printf("Dielectric constant:          %.2f\n",eps);
     print_go_params(go_params);
     if (seed==0) {
        	   	//seed=time(NULL);
-                seed=read_random_seed();
-           	printf("Initialized seed based on /dev/urandom.  Seed used is %ld\n",seed);
+        seed=read_random_seed();
+        printf("Initialized seed based on /dev/urandom.  Seed used is %ld\n",seed);
     } else {
-           	printf("Seed specified in file.  Seed used is %ld\n",seed);
+        printf("Seed specified in file.  Seed used is %ld\n",seed);
     }
     init_genrand(seed);
     top->generate_backbone_moves(&backbone_moves);
@@ -383,7 +429,6 @@ void simulation::finish_initialization(void)
     }
     printf("Number of monte carlo steps: %ld\n",nmcstep);
     printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
-    if (use_nb_list) update_pair_list_if_needed(0,initcoords);
     initialized=true;
 }
 
@@ -422,7 +467,7 @@ void simulation::align_ligand_with_aa_region(double * coords)
     set_ligand_com(com_aa_region,coords);
 }
 
-void simulation::prepare_docking(double trans_size, double rot_size, double bond_rot_size, int nsearch, double * coords)
+void simulation::prepare_docking(double trans_size, double rot_size, int nsearch, double * coords)
 {
     double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand,x[3],q[4],rmsd;
     int iatom,k,imove;
@@ -435,13 +480,21 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
     int isearch;
     private_coords = (double *) checkalloc(3*top->natom,sizeof(double));
     weight = (double *) checkalloc(top->natom,sizeof(double));
-    printf("Preparing for docking -- random displacement %.2f A, random rotation %.2f deg, random bond rotation %.2f deg\n",
-        trans_size, rot_size*RAD_TO_DEG, bond_rot_size*RAD_TO_DEG);
+    printf("Preparing for docking -- random displacement %.2f A, random rotation %.2f deg\n",
+        trans_size, rot_size*RAD_TO_DEG);
     for (iatom=0; iatom<top->natom; iatom++) {
         //weight is to be used for RMSD analysis of heavy-atom RMSD in ligand.
         if (top->ligand[iatom] && top->atoms[iatom].atomicNum>1) weight[iatom]=1.0; else weight[iatom]=0.0;
         for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
     }
+    printf("Randomizing bonds in ligand.\n");
+    for (imove=0; imove<sidechain_moves.size(); imove++) {
+            //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
+            if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
+                angle=(2.0*genrand_real3()-1.0)*M_PI;
+                rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
+            }
+        }
     //Begin search for a low-energy ligand conformation
     printf("Generating %d random ligand conformations to search for a low-energy initial pose.\n",nsearch);
     //private_coords2 = (double *) checkalloc(3*top->natom,sizeof(double));
@@ -452,19 +505,19 @@ void simulation::prepare_docking(double trans_size, double rot_size, double bond
         //restore coordinates from original
         for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
         //give a random displacement and orientation
-        do_ligand_trans(trans_size,private_coords);
-        do_ligand_rot(rot_size,private_coords);
+        do_ligand_trans(trans_size,0.0,trans_size,private_coords);
+        do_ligand_rot(rot_size,0.0,rot_size,private_coords);
         //rotate by random extents around rotatable bonds
         for (imove=0; imove<sidechain_moves.size(); imove++) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
-                angle=(2.0*genrand_real3()-1.0)*bond_rot_size;
+                angle=(2.0*genrand_real3()-1.0)*M_PI;
                 rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
             }
         }
         //check teh energy
-        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,coords);
-        total_energy(private_coords,energies,&etot);
+        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,coords);
+        total_energy(private_coords,&old_pair_list,energies,&etot);
         if (etot<best_etot) {
             //if lower energy than best so far, save it
             best_etot=etot;
