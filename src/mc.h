@@ -108,11 +108,10 @@ private:
     //double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
     void moved_energy(int movetype,subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
     void total_energy(double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
+    void ligand_energies(double * coords, double * total_internal_energy, double * internal_energies, double * total_intxn_energy, double * intxn_energies);
     bool update_pair_list_if_needed(long int istep, double * coords);
     void read_restart(char * fname);
     void write_restart(long int istep, char * fname);
-    void create_nonbond_list(double * center);
-    bool check_nb_list(bool * moved, double * center);
     //MC move support -- these are in mcmoves.cpp
     void mcmove(int * movetype, subset * movedatoms, double * coords);
     void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
@@ -121,15 +120,18 @@ private:
     void do_ligand_rot(double movesize, double splitfrac, double movesize2, double * coords);
     void heavy_atom_trans(subset * movedatoms, double movesize, double * coords);
     void heavy_atom_rot(subset * movedatoms, double movesize, double * coords);
+    //dock prep related stuff -- see init.cpp
     void set_ligand_com(double * desired_com, double * coords);
     void align_ligand_with_aa_region(double * coords);
     void prepare_docking(double trans_size, double rot_size,  int nsearch, double * coords);
     //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);
+    //this is in mc.cpp
     void print_energies(FILE * output,int hdr, const char * title, long int istep, double * energies, double etot);
-    void print_energies_by_table(void);
+    //void print_energies_by_table(void);
     //void load_tables(char * fmt);
+    void energy_analysis(char * type, char * fname,  char * enfname);
 public:
     void comparison_test(void);
 #if defined(PARALLEL) || defined(EXCHANGE)
@@ -143,7 +145,6 @@ public:
     void finish_initialization(void);
     void mcloop(void);
     void fakeloop(void);
-    void do_energies(char * type, char * fname,  char * enfname);
 };
 
 

@@ -79,7 +79,7 @@ simulation::~simulation()
 
 void simulation::process_commands(char * infname)
 {
-    char command[255],command2[255],fname[255],fmt[255],word[255],word2[255],unit[255];
+    char command[255],command2[255],fname[255],fmt[255],word[255],word2[255],fname2[255],unit[255];
     char * token;
     const char * delim = " \t\n";
     char chain;
@@ -89,6 +89,7 @@ void simulation::process_commands(char * infname)
     int i,move,nsearch;
 
     double energies[EN_TERMS],etot;
+    double intxn_energies[EN_TERMS],internal_energies[EN_TERMS],total_internal_energy,total_intxn_energy;
     mctemp=300.0;
     nres=0;
     initialized = false;
@@ -292,14 +293,32 @@ void simulation::process_commands(char * infname)
             if (!initialized) finish_initialization();
         } else if (strcasecmp("ENERGY",token)==0) {
             if (!initialized) finish_initialization();
-            top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);
-            total_energy(initcoords,&old_pair_list,energies,&etot);
-            print_energies(stdout,true,"Energy:",0,energies,etot);
+            if (oldcoords==NULL) {
+                oldcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+                for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
+            }
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            if (strcasecmp(word,"TOTAL")==0) {
+                top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);
+                total_energy(initcoords,&old_pair_list,energies,&etot);
+                print_energies(stdout,true,"Energy:",0,energies,etot);
+            } else if (strcasecmp(word,"LIGAND")==0) {
+                ligand_energies(oldcoords,&total_internal_energy,internal_energies,&total_intxn_energy,intxn_energies);
+                print_energies(stdout,true,"Internal:",0,internal_energies,total_internal_energy);
+                print_energies(stdout,true,"Intxn:",0,intxn_energies,total_intxn_energy);
+            }
+        } else if (strcasecmp("ANALYZE",token)==0) {
+            if (!initialized) finish_initialization();
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%s %s %s",word,fname,fname2);
+            energy_analysis(word,fname,fname2);
         } else if (strcasecmp("SETLIGANDCOM",token)==0) {
             //possibilities SETLIGANDCOM real real real or SETLIGANDCOM
             token+=strlen(token)+1;
             strncpy(word,token,sizeof(word)); //entire rest of line
-	    if (!initialized) finish_initialization();
+            if (!initialized) finish_initialization();
             if (strstr(word,"AAREGION")!=NULL) {
                 printf("Aligning center of mass of ligand with center of mass of AA region.\n");
                 align_ligand_with_aa_region(initcoords);
@@ -328,7 +347,7 @@ void simulation::process_commands(char * infname)
             } else {
                 printf("Unrecognized command.\n");
                 die();
-            }
+           }
         } //end of large if..else
     } //while(true)
     fclose(input);
@@ -633,66 +652,68 @@ void topology::load_covalent_tables(const char * covtablefmt, covalent_table * *
     printf("Total covalent tables loaded: %d\n",count);
     //printf("Total covalent table size:     %.2f MB\n",total_size);
 }*/
+//this does not include the go term!
+void simulation::ligand_energies(double * coords, double * total_internal_energy, double * internal_energies, double * total_intxn_energy, double * intxn_energies)
+{
+    int i;
+    std::vector<atom_nb_entry> pair_list;
+    for (i=0; i<EN_TERMS; i++) {
+        internal_energies[i]=0.0;
+        intxn_energies[i]=0.0;
+    }
+    top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,coords);
+    ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,old_pair_list.size(),&pair_list[0],coords,internal_energies,intxn_energies);
+    *total_internal_energy=0.0;
+    *total_intxn_energy=0.0;
+    for (i=0; i<EN_TERMS; i++) {
+        *total_internal_energy+=internal_energies[i];
+        *total_intxn_energy+=intxn_energies[i];
+    }
+}
 
-/*void simulation::do_energies(char * type, char * fname,  char * enfname)
+void simulation::energy_analysis(char * type, char * fname,  char * enfname)
 {
     long int frame,istep;
-    int ifrag;
+    int ifrag,i;
     FILE * input;
     FILE * enoutput;
-    double * rmsds;
-    double energies[EN_TERMS],etot;
+
+    double intxn_energies[EN_TERMS],internal_energies[EN_TERMS],total_internal_energy,total_intxn_energy,energies[EN_TERMS],etot;
     top->chaincodes[0]='P'; //hack to make compatible with pdb files derived from catdcd
-    rmsds=(double *) checkalloc(top->nfrag,sizeof(double));
-    initcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-    en_by_table=(double *) checkalloc(top->nfragtypes*top->nfragtypes,sizeof(double));
     if ((enfname==NULL) || (strlen(enfname)==0)) enoutput=stdout; else enoutput=fopen(enfname,"w");
     if (enoutput==NULL) {
         printf("Could not open energies file %s\n",enfname);
         die();
     }
-    if (strcasecmp(type,"rest")==0) {  //Calculate energies from restart file. Needed for replica exchange.
-        read_restart(fname);
-        for (ifrag=0; ifrag<top->nfrag; ifrag++) top->update_coords(ifrag,oldcenter,oldorient,oldcoords);
-        total_energy(oldcenter,oldorient,oldcoords,energies,&etot);{
-    FILE * f;
-    unsigned long seed;
-    double listcutoff;
-    double ptot,mctemp,p,size;
-    double total_table_size;
-    char buffer[255],word[255],tablefmt[255],covtablefmt[255],fragfmt[255],structf3name[255],psffname[255];
-    char * seq;
-    char * pch;
-    bool start,restart;
-    int itype,ifrag,i,jty
-        print_energies(stdout,false,"Energy: ",0,energies,etot);
-        return;
-    }
-    input=fopen(fname,"r");
-    if (input==NULL) {
-        printf("Could not open trajectory file %s\n",fname);
-        die();
-    }
-    frame=1;
-    while (!feof(input)) {
-        printf("Reading frame %ld\n",frame);
-        if (strcasecmp(type,"pdb")==0) {
-            //No need for diagnostic messages.  Later we can implement statistics on rmsds.
-            top->read_pdb_stream(input,initcoords);
-            top->fit_all_fragments(initcoords,oldcenter,oldorient,oldcoords,rmsds);
-        } else if (strcasecmp(type,"dat")==0) {
-            read_frame_quat(input,&istep,oldcenter,oldorient);
-            printf("Step number %ld\n",istep);
-            for (ifrag=0; ifrag<top->nfrag; ifrag++) top->update_coords(ifrag,oldcenter,oldorient,oldcoords);
+    /*if (strcasecmp(fname,"now")==0) {
+        //if (strcasecmp(type,"total",)==0) {
+        ligand_energies(oldcoords,&total_internal_energy,internal_energies,&total_intxn_energy,intxn_energies);
+        print_energies(enoutput,true,"Internal:",0,internal_energies,total_internal_energy);
+        print_energies(enoutput,true,"Intxn:",0,intxn_energies,total_intxn_energy);
+    } else {*/
+        input=fopen(fname,"r");
+        if (input==NULL) {
+            printf("Could not open trajectory file %s\n",fname);
+            die();
         }
-        if (feof(input)) break;
-        total_energy(oldcenter,oldorient,oldcoords,energies,&etot);
-        print_energies(enoutput,(frame==1),"Energy: ",frame,energies,etot);
-        if (use_std_tables) print_energies_by_table();
-        frame++;
-    }
+        frame=1;
+        while (!feof(input)) {
+            printf("Reading frame %ld\n",frame);
+            top->read_pdb_stream(input,oldcoords);
+            if (feof(input)) break;
+            if (strcasecmp(type,"TOTAL")==0) {
+                top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);
+                total_energy(initcoords,&old_pair_list,energies,&etot);
+                print_energies(enoutput,true,"Energy:",0,energies,etot);
+            } else if (strcasecmp(type,"LIGAND")==0) {
+                ligand_energies(oldcoords,&total_internal_energy,internal_energies,&total_intxn_energy,intxn_energies);
+                print_energies(enoutput,true,"Internal:",0,internal_energies,total_internal_energy);
+                print_energies(enoutput,true,"Intxn:",0,intxn_energies,total_intxn_energy);
+            }
+            frame++;
+        }
+    //}
     fclose(input);
     fclose(enoutput);
-    free(rmsds);
-}*/
+}
 

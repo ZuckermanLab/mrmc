@@ -186,6 +186,10 @@ class forcefield {
     double vdwBFact14[MAX_NUM_OF_ATOM_CLASSES][MAX_NUM_OF_ATOM_CLASSES];
     //void nonbond_energy(int rdie, int type1,  int type2, int is14, double dx, double dy, double dz, double * evdw, double * eelec);
     double MDE(double dihed, int type);
+    double bond_energy(int type, int iatom, int jatom, double * coords);
+    double angle_energy(int type, int a, int b, int c, double * coords);
+    double dihedral_energy(int type, int a, int b, int c, int d, double * coords);
+    double improper_energy(int type, int a, int b, int c, int d, double * coords);
 public:
     ATOMTYPELOOKUP atomTypeLookUp[MAX_NUM_OF_ATOM_TYPES]; //fragment's constructor needs the atomic masses
     double chargeParams[MAX_NUM_OF_ATOM_TYPES];//based on atom types, fragment's constructor needs this to calculate dipole moments
@@ -194,6 +198,7 @@ public:
     double exact_interaction_energy(int pbc, double halfboxsize, double boxsize,double eps,  int rdie, int natom1, int * types1, double * coords1, int natom2, int * types2, double * coords2);
     void moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
     void non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
+    void subset_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& atomset, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * internal_energies, double * intxn_energies);
     void link_fragments(void);
     void find_parameters(int numOfAtoms, ATOMS * atoms);
     //solvation stuff

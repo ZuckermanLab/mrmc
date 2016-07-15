@@ -50,12 +50,16 @@ void topology::read_pdb_file(char * fname, double * coords)
     read_pdb_stream(f,coords);
     fclose(f);
 }
+
 void topology::read_pdb_stream(FILE * input, double * coords)
 {
     FILE * f;
     char buf[255],buf2[8],aname[6],chain;
     int ires,iatom;
     double x,y,z;
+    bool * found_coords;
+    found_coords=(bool *) checkalloc(natom,sizeof(bool));
+    for (iatom=0; iatom<natom; iatom++) found_coords[iatom]=false;
     while (!feof(input)) {
         fgets(buf,sizeof(buf),input);
         if (strncasecmp("END",buf,3)==0) break;
@@ -64,7 +68,7 @@ void topology::read_pdb_stream(FILE * input, double * coords)
         //Using " sscanf(buf+12,"%4s",aname)  can run into problems when column 17 is occupied and copied into the name.
         strncpy(buf2,buf+12,4);
         if (buf2[0]==' ') {
-	   strncpy(buf2,buf+13,3); //for nonstandard pdb files where name is shifted one column
+	    strncpy(buf2,buf+13,3); //for nonstandard pdb files where name is shifted one column
            buf2[3]='\0';
         }
         buf2[4]='\0';
@@ -86,6 +90,11 @@ void topology::read_pdb_stream(FILE * input, double * coords)
         coords[3*iatom]=x;
         coords[3*iatom+1]=y;
         coords[3*iatom+2]=z;
+        found_coords[iatom]=true;
+    }
+    for (iatom=0; iatom<natom; iatom++) if (!found_coords[iatom]) {
+        printf("Failed to find coordinates for atom %s %d %s\n",atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name);
+        die();
     }
 }
 
