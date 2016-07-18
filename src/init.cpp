@@ -190,8 +190,8 @@ void simulation::process_commands(char * infname)
             for (i=1; i<=NUM_MOVES; i++) {
                 prob[i]=0.0;
                 movesize[i]=0.0;
-                splitfrac[i]=0.0;
-                movesize2[i]=0.0;
+                large_dist_frac[i]=0.0;
+                movesize_large[i]=0.0;
             }
             for(;;) {
                 fgets(command,sizeof(command),input);
@@ -207,13 +207,13 @@ void simulation::process_commands(char * infname)
                     sscanf(command,"%s %lg %lg %lg %lg\n",word,&p,&size,&frac,&size2);
                     prob[move]=p;
                     movesize[move]=size;
-                    splitfrac[move]=frac;
-                    movesize2[move]=size2;
-                    if (movesize2[move]<movesize[move]) {
-                        temp=movesize2[move];
-                        movesize2[move]=movesize[move];
+                    large_dist_frac[move]=frac;
+                    movesize_large[move]=size2;
+                    if (movesize_large[move]<movesize[move]) {
+                        temp=movesize_large[move];
+                        movesize_large[move]=movesize[move];
                         movesize[move]=temp;
-                        splitfrac[move]=1-splitfrac[move];
+                        large_dist_frac[move]=1-large_dist_frac[move];
                     }
                 } else {
                     sscanf(command,"%s %lg %lg\n",word,&p,&size);
@@ -233,22 +233,22 @@ void simulation::process_commands(char * infname)
                 if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
                     //strncpy(unit,"degrees\0",sizeof(unit));
                     movesize[move]*=DEG_TO_RAD;
-                    movesize2[move]*=DEG_TO_RAD;
+                    movesize_large[move]*=DEG_TO_RAD;
                     if (move==MOVE_LIGAND_ROT) {
-                        printf("%.20s moves:  Maximum size %.2f degrees  Overall fraction %.2f%% Smaller distribution size %.2f degrees Split fraction %.2f%%\n",
-                            mc_move_names[move],movesize2[move]*RAD_TO_DEG,prob[move]*100.0,movesize[move]*RAD_TO_DEG,splitfrac[move]*100.0);
+                        printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f degrees -- Larger max size %.2f degrees  -- Large dist fraction %.2f%%\n",
+                            mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,movesize_large[move]*RAD_TO_DEG,large_dist_frac[move]*100.0);
                     } else {
-                        printf("%.20s moves:  Maximum size %.2f degrees  Overall fraction %.2f%%\n",
-                            mc_move_names[move],movesize[move]*RAD_TO_DEG,prob[move]*100.0);
+                        printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees\n",
+                            mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG);
                     }
                 } else {
                     //strncpy(unit,"A\0",sizeof(unit);
                     if (move==MOVE_LIGAND_TRANS) {
-                        printf("%.20s moves:  Maximum size %.2f A  Overall fraction %.2f%% Smaller distribution size %.2f A Split fraction %.2f%%\n",
-                            mc_move_names[move],movesize2[move],prob[move]*100.0,movesize[move],splitfrac[move]*100.0);
+                        printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f A -- Larger max size %.2f A -- Large dist fraction %.2f%%\n",
+                            mc_move_names[move],prob[move]*100.0,movesize[move],movesize_large[move],large_dist_frac[move]*100.0);   
                     } else {
-                        printf("%.20s moves:  Maximum size %.2f degrees  Overall fraction %.2f%%\n",
-                            mc_move_names[move],movesize[move],prob[move]*100.0);
+                        printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f A\n", 
+                            mc_move_names[move],prob[move]*100.0,movesize[move]);   
                     }
                 }
            }

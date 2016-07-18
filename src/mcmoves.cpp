@@ -209,17 +209,17 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves)
     }
 }
 
-void simulation::do_ligand_trans(double movesize, double splitfrac, double movesize2, double * coords)
+void simulation::do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * coords)
 {
     double disp[3],m,r;
     int k,iatom;
     //construct a random vector within the unit sphere, and multiply by movesize
     //to give a random displacement whose magnitude is no more than movesize.
     r=genrand_real3();
-    if (r<splitfrac) {
-        rand_trans_vector(movesize,&disp[0]);
+    if (r<large_dist_frac) {
+        rand_trans_vector(movesize_large,&disp[0]);
     } else {
-        rand_trans_vector(movesize2,&disp[0]);
+        rand_trans_vector(movesize_small,&disp[0]);
     }
     //translate all ligand atoms
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
@@ -227,7 +227,7 @@ void simulation::do_ligand_trans(double movesize, double splitfrac, double moves
     }
 }
 
-void simulation::do_ligand_rot(double movesize, double splitfrac, double movesize2, double * coords)
+void simulation::do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * coords)
 {
     double quat[4],com[3],mass,totmass,r;
     int k, iatom;
@@ -241,13 +241,14 @@ void simulation::do_ligand_rot(double movesize, double splitfrac, double movesiz
     }
     for (k=0; k<3; k++) com[k]/=totmass;
     r=genrand_real3();
-    if (r<splitfrac) {
-        rand_small_quat(movesize,&quat[0]);
+    if (r<large_dist_frac) {
+        rand_small_quat(movesize_large,&quat[0]);
     } else {
-        rand_small_quat(movesize2,&quat[0]);
+        rand_small_quat(movesize_small,&quat[0]);
     }
     rotate_atoms_by_point(top->ligand,&quat[0],&com[0],coords);
 }
+
 //randomly move a heavy atom, togehter with any hydrogen atoms that may be bonded to it
 void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double * coords)
 {
@@ -268,7 +269,8 @@ void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double *
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
     }
 }
-void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * coords)
+
+void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * coords) 
 {
     int iatom,iheavy,j,jatom,k;
     double q[4];
@@ -314,11 +316,11 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
             movecount=backrub_moves.size();
             break;
         case MOVE_LIGAND_TRANS:
-            do_ligand_trans(movesize[MOVE_LIGAND_TRANS],splitfrac[MOVE_LIGAND_TRANS],movesize2[MOVE_LIGAND_TRANS],coords);
+            do_ligand_trans(movesize[MOVE_LIGAND_TRANS],large_dist_frac[MOVE_LIGAND_TRANS],movesize_large[MOVE_LIGAND_TRANS],coords);
             *movedatoms=top->ligand;
             break;
         case MOVE_LIGAND_ROT:
-            do_ligand_rot(movesize[MOVE_LIGAND_ROT],splitfrac[MOVE_LIGAND_ROT],movesize2[MOVE_LIGAND_ROT],coords);
+            do_ligand_rot(movesize[MOVE_LIGAND_ROT],large_dist_frac[MOVE_LIGAND_ROT],movesize_large[MOVE_LIGAND_ROT],coords);
             *movedatoms=top->ligand;
             break;
         case MOVE_HEAVY_TRANS:

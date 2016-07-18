@@ -64,8 +64,8 @@ private:
 
     long int nmcstep, nsave, nprint,ncheck,nprevstep; /*number of MC steps, frequency of saving conformations, frequency of printing*/
     double prob[NUM_MOVES+1],cumprob[NUM_MOVES+1],movesize[NUM_MOVES+1];
-    //This allocates room for parameters for a split distribution.  splitfrac is the fraction of t
-    double splitfrac[NUM_MOVES+1],movesize2[NUM_MOVES+1];
+    //This allocates room for parameters for a split distribution.  large_dist_frac is the fraction of t
+    double large_dist_frac[NUM_MOVES+1],movesize_large[NUM_MOVES+1];
     vector<mc_move> backbone_moves;
     vector<mc_move> sidechain_moves;
     vector<mc_move> backrub_moves;
@@ -116,8 +116,8 @@ private:
     void mcmove(int * movetype, subset * movedatoms, double * coords);
     void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
     void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
-    void do_ligand_trans(double movesize, double splitfrac, double movesize2, double * coords);
-    void do_ligand_rot(double movesize, double splitfrac, double movesize2, double * coords);
+    void do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * coords);
+    void do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * coords);
     void heavy_atom_trans(subset * movedatoms, double movesize, double * coords);
     void heavy_atom_rot(subset * movedatoms, double movesize, double * coords);
     //dock prep related stuff -- see init.cpp
