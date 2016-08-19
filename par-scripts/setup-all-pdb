@@ -1,0 +1,14 @@
+#!/bin/bash -v
+
+rm setup-failures
+for drug in `cat drug-codes`
+#for drug in `echo "oht"`
+do
+        echo $drug
+        #mkdir $drug
+        pdb=`grep -i $drug drug-list | head -n1 | awk '{print $1}'`
+	./setup-pdb $drug $pdb
+	if [ "$?" -ne "0" ]; then
+		echo $drug >> setup-failures
+	fi
+done

@@ -1,0 +1,28 @@
+#!/bin/bash -v
+
+#echo "Starting openbabel to add H atoms to the ligand" 
+# Use Babel to add H atoms [ this is already done on converting SDF files to PDB]
+#babel -h -ipdb $ligand.pdb -opdb $ligand.babel-h.pdb >> $molname.err 
+#obabel -h -ipdb $ligand.pdb -opdb $ligand.babel-h.pdb >> $molname.err
+
+#if [ ! -s $ligand.babel-h.pdb ]
+#then
+#        echo "FAILURE: Unable to add H atoms to the ligand. Some likely reasons are invalid pdb format or very non-standard atom name. Check to make sure atom name starts in column 14 of the pdb file. Check the $molname.err file for clues."
+#     exit 1
+#else
+
+# Prepare/read in ligand parameters
+
+# Set initial ligand net charge to zero or whatever is appropriate [filled in by parameterize-it]
+   #ligand_charge=0
+
+   echo "Starting antechamber to create prep file for tleap. Assuming ligand net charge = "  $ligand_charge >> $molname.err
+# Use Amber Antechamber to create tleap prepi file
+   $ACHOME/bin/antechamber -nc $ligand_charge -s 2 -c bcc -i $ligand.pdb -fi pdb -o pdb2pqr.ligand.prepi -fo prepi -at gaff >> $molname.err 
+   if [ ! -s pdb2pqr.ligand.prepi ]
+   then
+      echo "WARNING: Likely inconsistency between the assumed net charge and the number of electrons."
+   fi
+#fi
+
+

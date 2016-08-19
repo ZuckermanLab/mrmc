@@ -18,11 +18,12 @@
 #define MOVE_BACKBONE      1
 #define MOVE_SIDECHAIN     2
 #define MOVE_BACKRUB       3
-#define MOVE_LIGAND_TRANS  4
-#define MOVE_LIGAND_ROT    5
-#define MOVE_HEAVY_TRANS   6
-#define MOVE_HEAVY_ROT     7
-#define NUM_MOVES          7
+#define MOVE_LIGAND_BOND   4
+#define MOVE_LIGAND_TRANS  5
+#define MOVE_LIGAND_ROT    6
+#define MOVE_HEAVY_TRANS   7
+#define MOVE_HEAVY_ROT     8
+#define NUM_MOVES          8
 
 
 //For some reason the above include files are not prividing these declarations.
@@ -30,7 +31,7 @@
 //class fragmenttype;
 using std::vector;
 
-static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-trans","Ligand-rot","Heavy-atom-trans","Heavy-atom-rot"};
+static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-bond","Ligand-trans","Ligand-rot","Heavy-atom-trans","Heavy-atom-rot"};
 
 
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
@@ -69,6 +70,7 @@ private:
     vector<mc_move> backbone_moves;
     vector<mc_move> sidechain_moves;
     vector<mc_move> backrub_moves;
+    vector<mc_move> ligand_bond_rotation_moves;
     int startoption;
     topology * top;
     char * sequence;

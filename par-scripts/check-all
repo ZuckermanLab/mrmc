@@ -1,0 +1,19 @@
+#!/bin/bash
+
+rm results
+for drug in `cat successful-drugs`
+#for drug in `echo "oht"`
+do
+	echo $drug
+	cd $drug
+	sander -i ../amber.in -o amber.out -p $drug.prm7 -c $drug.inpcrd -O
+	amber=`awk '/DIHED/ {bond=$3; angle=$6; dih=$9} /VDWAALS/ {vdw=$3; elec=$6} /1-4 VDW/ {vdw14=$4; elec14=$8} END {print bond, angle, dih, vdw+vdw14, elec+elec14}' amber.out`
+	#echo $amber 
+	cp NEWPDB.PDB $drug-test.pdb
+	sed -e "s/:drug;/$drug/g" ../new-exact-energy.txt > exact-energy-$drug.txt
+	~/justin-mrmc/mrmc-7-28-16/mrmc-debug  exact-energy-$drug.txt > exact-energy-$drug.out
+	mrmc=`grep -i "Energy:" exact-energy-$drug.out | awk '($2==0) {print $4,$5,$6,$7,$8,$9,$10}'`
+	cd ..
+	comp=`echo "$drug $amber $mrmc" | awk '{print $1,$7-$2,$8-$3,$9+$10-$4,$11-$5,$12-$6}'`
+	echo $comp >> results
+done

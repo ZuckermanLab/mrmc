@@ -1,0 +1,4 @@
+#!/bin/bash
+
+rname=$1 #"rnamel" from previous script
+

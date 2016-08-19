@@ -1,0 +1,20 @@
+#!/bin/bash
+
+rm successful-drugs
+rm failed-drugs
+for drug in `cat drug-codes`
+do
+	echo $drug
+	if [ -s $drug/$drug.prm ]; then
+		cp -v $drug/amber99sb-$drug.prm params/
+		cp -v $drug/defs-amber99sb-$drug.txt params/
+		cp -v $drug/$drug.pdb params/
+		cp -v $drug/matches-$drug params/
+		cp -v $drug/$drug.frcmod params/
+		cp -v $drug/$drug.prepi params/
+		#cp -v $drug/$drug.prm7 params/
+		echo $drug >> successful-drugs
+	else
+		echo $drug >> failed-drugs
+	fi
+done

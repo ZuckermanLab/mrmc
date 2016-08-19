@@ -1,0 +1,29 @@
+#!/bin/bash 
+
+#Needed files (in same directory): antechamber_script, tleap-template, convert-to-tinker.py, defs-amber99sb.txt and amber99sb.prm
+#Four letter code for 
+drug=$1
+pdbfile=$drug/$drug.pdb
+export ligand_charge=`awk -f get-charge.awk $pdbfile`
+cd $drug #scripts are now in ..
+echo "Running antechamber"
+export ACHOME=/opt/amber14/
+export ligand=$drug
+../antechamber_script
+mv pdb2pqr.ligand.prepi $drug.prepi
+echo "Running parmchk"
+parmchk2 -i $drug.prepi -o $drug.frcmod -f prepi -p $ACHOME/dat/leap/parm/gaff.dat
+echo "Running tleap"
+sed -e "s/:rname;/$drug/g" ../tleap-template > $drug.tleap
+tleap -f $drug.tleap
+echo "converting parameters to tinker format"
+#the 2501 and 51 are the starting type number and class number for the converted file; 
+#they are set to accommodate the types and classes in amber99sb.prm
+export PYTHONPATH=~/lib/python:$PYTHONPATH
+drugu=`echo $drug | awk '{print toupper($0)}'`
+#on the compute nodes "python" points to "/usr/bin/python" which doesn't seem to be able to handle parmed
+/usr/local/bin/python ../convert-to-tinker.py $drug.prm7 2501 51 $drug.prm
+/usr/local/bin/python ../create-defs.py $drug.prm7 $drugu 2501 defs-$drug.txt 
+#append amber parameters and definitions to create a complete parameter set for the protein-ligand system
+cat ../amber99sb.prm $drug.prm > amber99sb-$drug.prm
+cat ../defs-amber99sb.txt defs-$drug.txt > defs-amber99sb-$drug.txt

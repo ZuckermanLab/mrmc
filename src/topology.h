@@ -169,7 +169,7 @@ struct topology {
     void print_atom_subset(subset atomset);
     subset follow_bonds(int iatom, const subset exclude);
     void generate_backbone_moves(vector<mc_move> * backbone_moves);
-    void generate_sidechain_moves(vector<mc_move> * sidechain_moves);
+    void generate_sidechain_moves(vector<mc_move> * sidechain_moves, vector<mc_move> * ligand_bond_rotation_moves);
     void generate_backrub_moves(vector<mc_move> * backrub_moves);
     //SASA stuff.
     //void add_to_overlap_list(int ifrag, int jfrag, double * coords, std::vector<atom_nb_entry> * overlap_list);

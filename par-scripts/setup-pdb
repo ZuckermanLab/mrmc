@@ -1,0 +1,13 @@
+#!/bin/bash
+
+drug=$1
+pdb=$2
+mkdir $drug
+#This converts the SDF file to a PDB structure, then adds hydrogens consistent with a pH of 7.
+obabel -isdf sdf/$drug.sdf -opdb -O $drug/$drug-from-sdf.pdb -h -p 7 -l1
+#Extract HETATM records from PDB to get the actual names of heavy atoms.
+#grep -i "hetatm" pdb/$pdb.pdb1 | grep -i $drug >> $drug/$drug-from-pdb.pdb
+drugu=`echo $drug | awk '{print toupper($0)}'`
+awk -v drug=$drugu '((substr($0,1,6)=="HETATM") && (substr($0,18,3)==drug) && (substr($0,22,1)=="A") && ((substr($0,17,1)=="A") || (substr($0,17,1)==" "))) {print $0} (substr($0,1,6)=="ENDMDL") {print "END"; exit}' \
+	pdb/$pdb.pdb1 > $drug/$drug-from-pdb.pdb
+./copy-labels.py $drug/$drug-from-sdf.pdb $drug/$drug-from-pdb.pdb $drugu $drug/$drug.pdb $drug/matches-$drug

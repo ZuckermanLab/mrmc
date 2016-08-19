@@ -245,10 +245,10 @@ void simulation::process_commands(char * infname)
                     //strncpy(unit,"A\0",sizeof(unit);
                     if (move==MOVE_LIGAND_TRANS) {
                         printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f A -- Larger max size %.2f A -- Large dist fraction %.2f%%\n",
-                            mc_move_names[move],prob[move]*100.0,movesize[move],movesize_large[move],large_dist_frac[move]*100.0);   
+                            mc_move_names[move],prob[move]*100.0,movesize[move],movesize_large[move],large_dist_frac[move]*100.0);
                     } else {
-                        printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f A\n", 
-                            mc_move_names[move],prob[move]*100.0,movesize[move]);   
+                        printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f A\n",
+                            mc_move_names[move],prob[move]*100.0,movesize[move]);
                     }
                 }
            }
@@ -439,7 +439,7 @@ void simulation::finish_initialization(void)
     }
     init_genrand(seed);
     top->generate_backbone_moves(&backbone_moves);
-    top->generate_sidechain_moves(&sidechain_moves);
+    top->generate_sidechain_moves(&sidechain_moves,&ligand_bond_rotation_moves);
     top->generate_backrub_moves(&backrub_moves);
     if ((prob[MOVE_SIDECHAIN]>0) && (sidechain_moves.size()<=0)) {
         //this usually
@@ -493,7 +493,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
     double angle;
     double * private_coords;
     double * weight;
-    //double * private_coords2;
+    double * private_coords2;
     double * best_coords;
     double etot, best_etot, energies[EN_TERMS], best_energies[EN_TERMS];
     int isearch;
@@ -507,41 +507,41 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
     }
     printf("Randomizing bonds in ligand.\n");
-    for (imove=0; imove<sidechain_moves.size(); imove++) {
+    for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
-            if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
+            //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*M_PI;
-                rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
-            }
+                rotate_atoms_by_axis(&ligand_bond_rotation_moves[imove],angle,private_coords);
+            //}
         }
     //Begin search for a low-energy ligand conformation
     printf("Generating %d random ligand conformations to search for a low-energy initial pose.\n",nsearch);
-    //private_coords2 = (double *) checkalloc(3*top->natom,sizeof(double));
+    private_coords2 = (double *) checkalloc(3*top->natom,sizeof(double));
     best_coords = (double *) checkalloc(3*top->natom,sizeof(double));
 
     best_etot=DUMMY_ENERGY; //very high
     for (isearch=1; isearch<=nsearch; isearch++) {
         //restore coordinates from original
-        for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
+        for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords2[3*iatom+k]=private_coords[3*iatom+k];
         //give a random displacement and orientation
-        do_ligand_trans(trans_size,0.0,trans_size,private_coords);
-        do_ligand_rot(rot_size,0.0,rot_size,private_coords);
+        do_ligand_trans(trans_size,0.0,trans_size,private_coords2);
+        do_ligand_rot(rot_size,0.0,rot_size,private_coords2);
         //rotate by random extents around rotatable bonds
-        for (imove=0; imove<sidechain_moves.size(); imove++) {
+        for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
-            if (top->ligand[sidechain_moves[imove].iaxis] && top->ligand[sidechain_moves[imove].jaxis]) {
+            //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*M_PI;
-                rotate_atoms_by_axis(&sidechain_moves[imove],angle,private_coords);
-            }
+                rotate_atoms_by_axis(&ligand_bond_rotation_moves[imove],angle,private_coords2);
+            //}
         }
         //check teh energy
-        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,coords);
-        total_energy(private_coords,&old_pair_list,energies,&etot);
+        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,private_coords2);
+        total_energy(private_coords2,&old_pair_list,energies,&etot);
         if (etot<best_etot) {
             //if lower energy than best so far, save it
             best_etot=etot;
             for (k=0; k<EN_TERMS; k++) best_energies[k]=energies[k];
-            for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) best_coords[3*iatom+k]=private_coords[3*iatom+k];
+            for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) best_coords[3*iatom+k]=private_coords2[3*iatom+k];
         }
         if (isearch%nprint==0) print_energies(stdout,(isearch==nprint),"Search:",isearch,best_energies,best_etot);
     }
@@ -551,7 +551,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         for (k=0; k<3; k++) coords[3*iatom+k]=best_coords[3*iatom+k];
     }
     free(private_coords);
-    //free(private_coords2);
+    free(private_coords2);
     free(best_coords);
     free(weight);
 }

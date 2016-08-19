@@ -168,13 +168,14 @@ void topology::generate_backrub_moves(vector<mc_move> * backrub_moves)
 }
 
 
-void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves)
+void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vector<mc_move> * ligand_bond_rotation_moves)
 {
     int ibond,iatom,nligand,n;
     mc_move newmove;
     subset exclude;
     subset temp;
     sidechain_moves->clear();
+    ligand_bond_rotation_moves->clear();
     exclude.init(natom);
     temp.init(natom);
     nligand=0;
@@ -200,8 +201,11 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves)
                 temp/=newmove.movedatoms;
                 newmove.movedatoms=temp;
             }
+            //make separate lists of the "sidechain" moves in the ligand
+            ligand_bond_rotation_moves->push_back(newmove);
+        } else {
+            sidechain_moves->push_back(newmove);
         }
-        sidechain_moves->push_back(newmove);
 #ifdef DEBUG
         printf("Adding sidechain move:\n");
         print_atom_subset(newmove.movedatoms);
@@ -270,7 +274,7 @@ void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double *
     }
 }
 
-void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * coords) 
+void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * coords)
 {
     int iatom,iheavy,j,jatom,k;
     double q[4];
@@ -315,6 +319,10 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
             movelist=&backrub_moves[0];
             movecount=backrub_moves.size();
             break;
+        case MOVE_LIGAND_BOND:
+            movelist=&ligand_bond_rotation_moves[0];
+            movecount=ligand_bond_rotation_moves.size();
+            break;
         case MOVE_LIGAND_TRANS:
             do_ligand_trans(movesize[MOVE_LIGAND_TRANS],large_dist_frac[MOVE_LIGAND_TRANS],movesize_large[MOVE_LIGAND_TRANS],coords);
             *movedatoms=top->ligand;
@@ -333,7 +341,7 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
             printf("Error in switch statement.\n");
             die();
     }
-    if ((move==MOVE_BACKBONE) || (move==MOVE_SIDECHAIN) || (move==MOVE_BACKRUB)) {
+    if ((move==MOVE_BACKBONE) || (move==MOVE_SIDECHAIN) || (move==MOVE_BACKRUB) || (move==MOVE_LIGAND_BOND)) {
         //pick a random move from the list
         moveindex=(int) (genrand_real3()*movecount);
         *movedatoms=movelist[moveindex].movedatoms;
