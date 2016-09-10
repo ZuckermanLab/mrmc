@@ -72,6 +72,8 @@ simulation::~simulation()
     free(newcenter);
     free(neworient);*/
     //if (frag_nblist!=NULL) delete frag_nblist;
+    if (acc_by_atom!=NULL) free(acc_by_atom);
+    if (att_by_atom!=NULL) free(att_by_atom);
     delete ffield;
     delete go_model;
     delete top;
@@ -86,7 +88,7 @@ void simulation::process_commands(char * infname)
     FILE * input;
     FILE * output;
     double p,size,frac, size2, ptot,mctemp, trans_size, rot_size, bond_rot_size, desired_ligand_com[3],temp;
-    int i,move,nsearch;
+    int i,iatom,move,nsearch;
 
     double energies[EN_TERMS],etot;
     double intxn_energies[EN_TERMS],internal_energies[EN_TERMS],total_internal_energy,total_intxn_energy;
@@ -149,6 +151,17 @@ void simulation::process_commands(char * infname)
                 }
 #endif // EXCHANGE
                 write_restart(0,fname);*/
+            } else if (strcasecmp("MCBYATOM",fmt)==0) {
+                //write info on the counts of moves attempted and accepted by atom
+                output=fopen(fname,"w");
+                if (output==NULL) {
+                   printf("Could not open file %s.\n",fname);
+                   die();
+                }
+                for (iatom=0; iatom<top->natom; iatom++) fprintf(output,"%d %d %s %ld %ld\n",iatom+1,
+                   top->atoms[iatom].resName,top->atoms[iatom].resNum+1,top->atoms[iatom].name,att_by_atom[iatom],acc_by_atom[iatom]);
+                fclose(output);
+                printf("MC by-atom counts written to file %s.\n",fname);
             } else {
                 printf("Unrecognized format.\n");
                 die();
@@ -289,6 +302,9 @@ void simulation::process_commands(char * infname)
             strncpy(trajfmt,token,sizeof(trajfmt));
             token=strtok(NULL,delim);
             strncpy(xyzfname,token,sizeof(xyzfname));
+        } else if (strncasecmp("MCLOG",token,4)==0) {
+            token=strtok(NULL,delim);
+            strncpy(mclogfname,token,sizeof(mclogfname));
         } else if (strncasecmp("INIT",token,4)==0) {
             if (!initialized) finish_initialization();
         } else if (strcasecmp("ENERGY",token)==0) {

@@ -364,7 +364,8 @@ void simulation::mcloop(void)
     long int istep,nacc[NUM_MOVES+1],natt[NUM_MOVES+1];
     int movetype,i,k;
     bool new_nb_list;
-    double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev;
+    bool accepted;
+    double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev,sumprob[NUM_MOVES+1],avgprob;
     double cputime,elapsedtime;
     double oldenergies[EN_TERMS],newenergies[EN_TERMS],cum_energies[EN_TERMS],fresh_energies[EN_TERMS];
     //bool * moved;
@@ -374,7 +375,6 @@ void simulation::mcloop(void)
     clock_t starttime;
     time_t start,end;
     char buffer[255];
-
 #ifdef __unix__
     struct rusage usage;
     struct sysinfo si;
@@ -408,7 +408,15 @@ void simulation::mcloop(void)
         die();
     }*/
     printf("Will write trajectory output to file %s.\n",xyzfname);
-    printf("Will write centers/quaternions to file %s.\n",quatfname);
+    //printf("Will write centers/quaternions to file %s.\n",quatfname);
+    if (strlen(mclogfname)>0) {
+        mc_log=fopen(mclogfname,"w");
+        if (mc_log==NULL) {
+            printf("Could not open trajectory file %s\n",xyzfname);
+            die();
+        }
+        printf("Will write MC acceptance data to file %s.\n",mclogfname);
+    } 
     xwrite = (float *) checkalloc(top->natom,sizeof(float));
     ywrite = (float *) checkalloc(top->natom,sizeof(float));
     zwrite = (float *) checkalloc(top->natom,sizeof(float));
@@ -424,6 +432,13 @@ void simulation::mcloop(void)
     for (i=1; i<=NUM_MOVES; i++) {
         nacc[i]=0;
         natt[i]=0;
+        sumprob[i]=0.0;
+    }
+    acc_by_atom = (long int *) checkalloc(top->natom,sizeof(long int));
+    att_by_atom = (long int *) checkalloc(top->natom,sizeof(long int));
+    for (i=0; i<top->natom; i++) {
+        acc_by_atom[i]=0;
+        att_by_atom[i]=0;
     }
     //enexactcount=0;
     //entablecount=0;
@@ -458,6 +473,7 @@ void simulation::mcloop(void)
          mcmove(&movetype,&movedatoms,newcoords);
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
+         for (i=0; i<top->natom; i++) if (movedatoms[i]) att_by_atom[i]++;
          moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,oldenergies,&eold);
          if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,newcoords);
          //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
@@ -468,12 +484,15 @@ void simulation::mcloop(void)
          //printf("mcloop: step, de, de2 = %d %.4f %.4f\n",istep,de,de2);
          //This guards against floating point errors.
          if (de<0) p=1.0; else p=exp(-beta*de);
+         sumprob[movetype]+=p;
          r=genrand_real3();
-         if (r<p) {
+         accepted=(r<p);
+         if (accepted) {
              //ACCEPTED
              cum_energy+=de;
              for (i=0; i<EN_TERMS; i++) cum_energies[i]+=newenergies[i]-oldenergies[i];
              nacc[movetype]++;
+             for (i=0; i<top->natom; i++) if (movedatoms[i]) acc_by_atom[i]++;
              for (i=0; i<top->natom; i++) if (movedatoms[i]) {
                  for (k=0; k<3; k++) oldcoords[3*i+k]=newcoords[3*i+k];
              }
@@ -486,7 +505,13 @@ void simulation::mcloop(void)
              }
              new_pair_list=old_pair_list;
          }
-
+         if (mc_log!=NULL) {
+             //Log file: step number, move type, deltaU, probability, accepted?, "*"...
+             fprintf(mc_log,"%ld %s %g %g %c : ",istep+1,mc_move_names[movetype],de,p,yesno(accepted));
+             //write out components of the energy difference
+             for (i=0; i<EN_TERMS; i++) fprintf(mc_log,"%g ",newenergies[i]-oldenergies[i]);
+             fprintf(mc_log,"\n");
+         }
          //check_nb_list(istep);
          //Now, "new" and "old" should be the same again, and on the MC trajectory.
          //Handle saving and printing.
@@ -499,9 +524,11 @@ void simulation::mcloop(void)
                 fprintf(xyzoutput,"ENDMDL\n");
              }
              //write_frame_quat(quatoutput,istep,newcenter,neworient);
+             fflush(xyzoutput);
          }
          if ((istep%nprint)==0) {
-             fflush(xyzoutput);
+             fflush(mc_log);
+             //fflush(xyzoutput);
              //fflush(quatoutput);
              //fresh_energy=total_energy();
              //print_energies(FALSE,"Cum: ",istep,cum_energies,cum_energy);
@@ -527,7 +554,8 @@ void simulation::mcloop(void)
              //printf("Step %ld: Cumulative energy = %.4f   Fresh energy = %.4f Deviation %.4f\n",istep,cum_energy,fresh_energy,cum_energy-fresh_energy);
              for (i=1; i<=NUM_MOVES; i++) {
                 if (natt[i]>0) accrate=((double) nacc[i]/(double) natt[i])*100.0; else accrate=0.0;
-                printf("%s moves   Attempted %ld   Accepted %ld   Acceptance rate=%.2f%%\n",mc_move_names[i],natt[i],nacc[i],accrate);
+                if (natt[i]>0) avgprob=sumprob[i]/((double) natt[i]); else avgprob=0.0;
+                printf("%s moves   Attempted %ld   Accepted %ld   Acceptance rate=%.2f%%  Avg. probability = %g\n",mc_move_names[i],natt[i],nacc[i],accrate,avgprob);
              }
              //if (nacc[MOVE_BACKRUB]>0) die();
              //printf("Minimum r: %.3f\n",sqrt(minr2));
@@ -575,6 +603,7 @@ void simulation::mcloop(void)
 #endif
     //if (strlen(restartfname)>0) write_restart(nprevstep+nmcstep,restartfname);
     fclose(xyzoutput);
+    if (mc_log!=NULL) fclose(mc_log);
     //fclose(quatoutput);
     if (enwrite) {
         fclose(energy_output);

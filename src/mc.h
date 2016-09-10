@@ -50,9 +50,10 @@ private:
     //long int entablecount, enexactcount, enevalcount;
     FILE * energy_output;
     FILE * pairs_output;
-    char structfname[255],struct2fname[255],xyzfname[255],quatfname[255],restartfname[255],trajfmt[3];
+    char structfname[255],struct2fname[255],xyzfname[255],quatfname[255],restartfname[255],trajfmt[4],mclogfname[255];
     FILE * xyzoutput;
     FILE * quatoutput;
+    FILE * mc_log;
     double * initcoords;
     /*double * newcenter;
     double * neworient;*/
@@ -82,6 +83,8 @@ private:
     float * ywrite;
     float * zwrite;
     unsigned long int seed;
+    long int * acc_by_atom;
+    long int * att_by_atom;
 
 
     //double * en_by_table;
