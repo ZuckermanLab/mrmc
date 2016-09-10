@@ -158,7 +158,7 @@ void simulation::process_commands(char * infname)
                    printf("Could not open file %s.\n",fname);
                    die();
                 }
-                for (iatom=0; iatom<top->natom; iatom++) fprintf(output,"%d %d %s %ld %ld\n",iatom+1,
+                for (iatom=0; iatom<top->natom; iatom++) fprintf(output,"%d %s %d %s %ld %ld\n",iatom+1,
                    top->atoms[iatom].resName,top->atoms[iatom].resNum+1,top->atoms[iatom].name,att_by_atom[iatom],acc_by_atom[iatom]);
                 fclose(output);
                 printf("MC by-atom counts written to file %s.\n",fname);
