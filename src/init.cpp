@@ -512,7 +512,10 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
     double * private_coords2;
     double * best_coords;
     double etot, best_etot, energies[EN_TERMS], best_energies[EN_TERMS];
-    int isearch;
+    int isearch,ibest;
+#ifdef MONITORPREDOCK
+    FILE * predock_poses; //pdb file containing predock poses
+#endif
     private_coords = (double *) checkalloc(3*top->natom,sizeof(double));
     weight = (double *) checkalloc(top->natom,sizeof(double));
     printf("Preparing for docking -- random displacement %.2f A, random rotation %.2f deg\n",
@@ -536,6 +539,10 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
     best_coords = (double *) checkalloc(3*top->natom,sizeof(double));
 
     best_etot=DUMMY_ENERGY; //very high
+    ibest=-1;
+#ifdef MONITORPREDOCK
+    predock_poses=fopen("predock_poses.pdb","w");
+#endif
     for (isearch=1; isearch<=nsearch; isearch++) {
         //restore coordinates from original
         for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords2[3*iatom+k]=private_coords[3*iatom+k];
@@ -556,11 +563,23 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         if (etot<best_etot) {
             //if lower energy than best so far, save it
             best_etot=etot;
+            ibest=isearch;
             for (k=0; k<EN_TERMS; k++) best_energies[k]=energies[k];
             for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) best_coords[3*iatom+k]=private_coords2[3*iatom+k];
         }
         if (isearch%nprint==0) print_energies(stdout,(isearch==nprint),"Search:",isearch,best_energies,best_etot);
+#ifdef MONITORPREDOCK
+        fprintf(predock_poses,"REMARK random poses %d, total energy %g\n",isearch,etot);
+        fprintf(predock_poses,"MODEL     %4d\n",isearch);
+        top->write_pdb_stream(predock_poses,private_coords2);
+        fprintf(predock_poses,"ENDMDL\n");
+        fflush(predock_poses);
+#endif
     }
+#ifdef MONITORPREDOCK
+    fclose(predock_poses);
+    printf("Best pose is number %d\n",ibest);
+#endif
     rmsd_fit(top->natom,weight,best_coords,coords,&x[0],&q[0],&rmsd);
     printf("Initial ligand RMSD: %.3f\n",rmsd);
     for (iatom=0; iatom<top->natom; iatom++) {
