@@ -54,6 +54,7 @@ private:
     FILE * xyzoutput;
     FILE * quatoutput;
     FILE * mc_log;
+    subset valid_coords;
     double * initcoords;
     /*double * newcenter;
     double * neworient;*/

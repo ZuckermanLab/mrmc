@@ -409,14 +409,18 @@ void simulation::mcloop(void)
     }*/
     printf("Will write trajectory output to file %s.\n",xyzfname);
     //printf("Will write centers/quaternions to file %s.\n",quatfname);
+    mc_log=NULL;
     if (strlen(mclogfname)>0) {
         mc_log=fopen(mclogfname,"w");
         if (mc_log==NULL) {
-            printf("Could not open trajectory file %s\n",xyzfname);
-            die();
+            printf("Could not open MC log file %s\n",xyzfname);
+        } else {
+            printf("Will write MC acceptance data to file %s.\n",mclogfname);
         }
-        printf("Will write MC acceptance data to file %s.\n",mclogfname);
-    } 
+    }
+    if (mc_log==NULL) {
+        printf("Will not write MC acceptance data.\n");
+    }
     xwrite = (float *) checkalloc(top->natom,sizeof(float));
     ywrite = (float *) checkalloc(top->natom,sizeof(float));
     zwrite = (float *) checkalloc(top->natom,sizeof(float));

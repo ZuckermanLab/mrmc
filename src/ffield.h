@@ -201,6 +201,7 @@ public:
     void subset_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& atomset, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * internal_energies, double * intxn_energies);
     void link_fragments(void);
     void find_parameters(int numOfAtoms, ATOMS * atoms);
+    void build_coords(double * coords, int numOfAtoms, ATOMS * atoms, subset& valid_coords);
     //solvation stuff
     void nonbond_energy_gb(int type1, int type2, bool is14, double r2, double a1a2, double * evdw, double * eelec, double * egb);
     //void calculate_born_radii(gb_param_info * params, int natom, ATOMS * atoms, double * coords, double * reff, double * energies);

@@ -39,7 +39,7 @@ struct dcd_titles {
 //C arrays are zero-based.
 const char * origin = "Produced by Mixed-Resolution Monte Carlo code";
 
-void topology::read_pdb_file(char * fname, double * coords)
+void topology::read_pdb_file(char * fname, double * coords, subset& valid_coords)
 {
     FILE * f;
     f=fopen(fname,"r");
@@ -47,19 +47,20 @@ void topology::read_pdb_file(char * fname, double * coords)
         printf("Could not open pdb file %s for reading\n",fname);
         die();
     }
-    read_pdb_stream(f,coords);
+    read_pdb_stream(f,coords,valid_coords);
     fclose(f);
 }
 
-void topology::read_pdb_stream(FILE * input, double * coords)
+void topology::read_pdb_stream(FILE * input, double * coords, subset& valid_coords)
 {
     FILE * f;
     char buf[255],buf2[8],aname[6],chain;
     int ires,iatom;
     double x,y,z;
-    bool * found_coords;
-    found_coords=(bool *) checkalloc(natom,sizeof(bool));
-    for (iatom=0; iatom<natom; iatom++) found_coords[iatom]=false;
+    /*bool * found_coords;
+    found_coords=(bool *) checkalloc(natom,sizeof(bool));*/
+    valid_coords.init(natom); //to null set
+    //for (iatom=0; iatom<natom; iatom++) found_coords[iatom]=false;
     while (!feof(input)) {
         fgets(buf,sizeof(buf),input);
         if (strncasecmp("END",buf,3)==0) break;
@@ -85,17 +86,19 @@ void topology::read_pdb_stream(FILE * input, double * coords)
         }
         if (iatom<0) {
             printf("Could not find atom %c %d %s from PDB file\n",chain,ires,aname);
-            die();
+            //die();
         }
         coords[3*iatom]=x;
         coords[3*iatom+1]=y;
         coords[3*iatom+2]=z;
-        found_coords[iatom]=true;
+        //found_coords[iatom]=true;
+	valid_coords+=iatom;
     }
-    for (iatom=0; iatom<natom; iatom++) if (!found_coords[iatom]) {
+    //do this later
+    /*for (iatom=0; iatom<natom; iatom++) if (!found_coords[iatom]) {
         printf("Failed to find coordinates for atom %s %d %s\n",atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name);
         die();
-    }
+    }*/
 }
 
 void topology::write_pdb_stream(FILE * output, double * coords)
@@ -430,7 +433,7 @@ void simulation::write_dcd_header(FILE * dcdfile)
     hdr.version = CHARMM_VERSION;
     titles.ntitle = 1;
     for (i=0; i<sizeof(titles.title); i++) titles.title[i]=' ';
-    strncpy(titles.title,origin,sizeof(origin));
+    strncpy(titles.title,origin,strlen(origin)); //does not copy null terminator (there should be spaces already there)
     fortran_fwrite(&hdr,sizeof(hdr),1,dcdfile);
     fortran_fwrite(&titles,sizeof(titles),1,dcdfile);
     fortran_fwrite(&top->natom,sizeof(top->natom),1,dcdfile);

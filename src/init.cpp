@@ -396,7 +396,7 @@ void simulation::create_lists(void)
 
 void simulation::finish_initialization(void)
 {
-    int i;
+    int i,iatom;
     if (!aaregion_specified) {
         printf("All atom region not explicitly specified.  By default assuming that all atoms are to be in the all-atom region.\n");
         top->aaregion_res.init(nres);
@@ -415,7 +415,12 @@ void simulation::finish_initialization(void)
 #endif
     printf("Will read PDB file %s.\n",structfname);
     initcoords=(double *) checkalloc(3*top->natom,sizeof(double));
-    top->read_pdb_file(structfname,initcoords);
+    top->read_pdb_file(structfname,initcoords,valid_coords);
+    for (iatom=0; iatom<top->natom; iatom++) if (!valid_coords[iatom]) {
+        printf("Failed to find coordinates for atom %s %d %s\n",top->atoms[iatom].resName,top->atoms[iatom].resNum+1,top->atoms[iatom].name);
+        die();
+    }
+    //ffield->build_coords(initcoords,top->natom,top->atoms,valid_coords);
     //we need to have set up go parameters by now
     finish_go_params(&go_params);
     go_model = new go_model_info();
@@ -712,7 +717,7 @@ void simulation::energy_analysis(char * type, char * fname,  char * enfname)
     int ifrag,i;
     FILE * input;
     FILE * enoutput;
-
+    subset valid_coords;
     double intxn_energies[EN_TERMS],internal_energies[EN_TERMS],total_internal_energy,total_intxn_energy,energies[EN_TERMS],etot;
     top->chaincodes[0]='P'; //hack to make compatible with pdb files derived from catdcd
     if ((enfname==NULL) || (strlen(enfname)==0)) enoutput=stdout; else enoutput=fopen(enfname,"w");
@@ -734,7 +739,7 @@ void simulation::energy_analysis(char * type, char * fname,  char * enfname)
         frame=1;
         while (!feof(input)) {
             printf("Reading frame %ld\n",frame);
-            top->read_pdb_stream(input,oldcoords);
+            top->read_pdb_stream(input,oldcoords,valid_coords);
             if (feof(input)) break;
             if (strcasecmp(type,"TOTAL")==0) {
                 top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);

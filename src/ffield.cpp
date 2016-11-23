@@ -1197,4 +1197,105 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
   printf("setup bonded1-4 interactions: passed\n");
 
 }
+#define MAX_PASSES 10
+//Build all invalid coordinates using force field parameters. [At the moment this is dead code, need to work on better ways to model build.]
+
+/*void forcefield::build_coords(double * coords, int numOfAtoms, ATOMS * atoms, subset& valid_coords)
+{
+    bool done;
+    int pass;
+    int iatom, j, a, b, c, d, k, l;
+    int bondtype, angletype, dihtype;
+    double bond, angle, dih;
+    bool * current_valid_coords;
+    done=false;
+    pass=1;
+    do {
+        for(iatom=0;iatom<numOfAtoms;iatom++){
+            for(j=0;j<atoms[iatom].numOfBonded14Atoms;j++){
+                dihtype=-1;
+                angletype=-1;
+                bondtype=-1;
+                a = atoms[iatom].bonded14AtomList[4*j];
+                b = atoms[iatom].bonded14AtomList[4*j+1];
+                c = atoms[iatom].bonded14AtomList[4*j+2];
+                d = atoms[iatom].bonded14AtomList[4*j+3];
+                dihtype  = atoms[iatom].bonded14DihedParamType[j];
+                //Search for the nonzero dihedral with lowest multiplicity.  Read its phase to determine
+                //the dihedral angle for the new atom.
+                //need to do something more elaborate
+                if ((strcmp(atoms[a].name,"C")==0) && (strcmp(atoms[d].name,"C")==0)) {
+                    //it's a phi angle
+                    dih=-79.0*M_PI/180;
+                } else if ((strcmp(atoms[a].name,"N")==0) && (strcmp(atoms[d].name,"N")==0)) {
+                    //it's a psi angle
+                    dih=139.0*M_PI/180;
+                } else dih=M_PI;
+
+		//for (k=0; k<4; k++) if (dihedParams[dihtype].V[k]!=0.0) {
+                //    if (dihedParams[dihtype].phase[k]) dih=M_PI; else dih=0.0;
+                //}
+                //try to build atom "d" given "a", "b", and "c"
+                if (valid_coords[a] && valid_coords[b] && valid_coords[c] && !valid_coords[d]){//avoid double counting dihedral energies
+                    //Search the angle list for an angle term centered on atom "c". (We now work with atoms[d] instead of atoms[iatom]).
+                    for (k=0; k<atoms[d].numOfAngles; k++)
+                        if (((atoms[d].angleAtomList[3*k]==b) && (atoms[d].angleAtomList[3*k+1]==c) && (atoms[d].angleAtomList[3*k+2]==d)) ||
+                            ((atoms[d].angleAtomList[3*k]==d) && (atoms[d].angleAtomList[3*k+1]==c) && (atoms[d].angleAtomList[3*k+2]==b))) {
+                                angletype=atoms[d].angleParamType[k];
+                                angle=angleParams[angletype].theta0;
+                                break;
+                        }
+                    for (k=0; k<atoms[d].numOfBondedAtoms; k++) {
+                        if (atoms[d].bondedAtomList[k]==c) {
+                            bondtype=atoms[d].bondedParamType[k];
+                            bond=bondParams[bondtype].r0;
+                        }
+                    }
+                    if ((bondtype>=0) && (angletype>=0) && (dihtype>=0)) {
+                        //build the atom!
+                        printf("Building coordinates for atom %s %d %s.\n",atoms[d].resName,atoms[d].resNum+1,atoms[d].name);
+                        build_atom(coords,a,b,c,d,bond,angle,dih);
+                        valid_coords+=d;
+                    }
+                }//if (d>a) && !valid_coords[d])
+                //do the same thing on the other end of the dihedral (try to build atom "a" given "b", "c" and "d")
+                bondtype=-1;
+                angletype=-1;
+                if (valid_coords[d] && valid_coords[c] && valid_coords[b] && !valid_coords[a]){//avoid double counting dihedral energies
+                    //Search the angle list for an angle term centered on atom "c". (We now work with atoms[d] instead of atoms[iatom]).
+                    for (k=0; k<atoms[a].numOfAngles; k++)
+                        if (((atoms[a].angleAtomList[3*k]==a) && (atoms[a].angleAtomList[3*k+1]==b) && (atoms[a].angleAtomList[3*k+2]==c)) ||
+                            ((atoms[a].angleAtomList[3*k]==c) && (atoms[a].angleAtomList[3*k+1]==b) && (atoms[a].angleAtomList[3*k+2]==a))) {
+                                angletype=atoms[a].angleParamType[k];
+                                angle=angleParams[angletype].theta0;
+                                break;
+                        }
+                    for (k=0; k<atoms[a].numOfBondedAtoms; k++) {
+                        if (atoms[a].bondedAtomList[k]==b) {
+                            bondtype=atoms[a].bondedParamType[k];
+                            bond=bondParams[bondtype].r0;
+                        }
+                    }
+                    if ((bondtype>=0) && (angletype>=0) && (dihtype>=0)) {
+                        //build the atom!
+                        printf("Building coordinates for atom %s %d %s.\n",atoms[a].resName,atoms[a].resNum+1,atoms[a].name);
+                        build_atom(coords,d,c,b,a,bond,angle,dih);
+                        valid_coords+=a;
+                    }
+                }//if (d>a) && !valid_coords[d])
+            } //for(j)
+        } //for(iatom)
+    //check to see if we have all valid coordinates
+    done=true;
+    for (iatom=0; iatom<numOfAtoms; iatom++) if (!valid_coords[iatom]) {
+        printf("Still missing valid coordinates for  atom %s %d %s.\n",atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name);
+        done=false;
+        break;
+    }
+
+  } while (!done && (pass<MAX_PASSES));
+
+}*/
+
+
 
