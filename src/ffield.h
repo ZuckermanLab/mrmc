@@ -13,6 +13,7 @@
 #include <time.h>
 #include <string.h>
 #include "util.h" //for subset
+
 //#include "fragments.h"
 
 
@@ -80,7 +81,7 @@ typedef struct _atoms_ {
   bool evaluableBond[6]; //This is a set of flags determining whether the bond is "evaluable."
   int bondedParamType[6];
   //The "total" bonds include all bonds, regardless of where they are.
-  int total_numOfBondedAtoms;//this is from tinker xyz file, regular bonded1-2                                                                                                                           
+  int total_numOfBondedAtoms;//this is from tinker xyz file, regular bonded1-2
   int total_bondedAtomList[6];
   int numOfAngles;//these are regular bonded1-3 interactions
   int angleAtomList[3*20];
@@ -169,6 +170,14 @@ struct atom_nb_entry {
     bool is14;
 };
 
+#ifdef SEDDD
+struct seddd_params {
+    double c, eps0, eps1, delta_eps;
+    double hydration_volume[MAX_NUM_OF_ATOM_CLASSES];
+    double hydration_shell_thickness[MAX_NUM_OF_ATOM_CLASSES];
+};
+#endif
+
 class forcefield {
     friend class topology;
     int numOfBondParams;
@@ -197,9 +206,15 @@ public:
     forcefield(char * fname);
     void nonbond_energy(int rdie, int type1,  int type2, int is14, double r2, double * evdw, double * eelec);
     double exact_interaction_energy(int pbc, double halfboxsize, double boxsize,double eps,  int rdie, int natom1, int * types1, double * coords1, int natom2, int * types2, double * coords2);
+#ifdef SEDDD
+    void moved_non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * frac_volumes, double * energies);
+    void non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * frac_volumes, double * energies);
+    void subset_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& atomset, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * internal_energies, double * intxn_energies);
+#else
     void moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
     void non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies);
     void subset_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& atomset, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * internal_energies, double * intxn_energies);
+#endif
     void link_fragments(void);
     void find_parameters(int numOfAtoms, ATOMS * atoms);
     void build_coords(double * coords, int numOfAtoms, ATOMS * atoms, subset& valid_coords);

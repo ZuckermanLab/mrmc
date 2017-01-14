@@ -190,7 +190,11 @@ double topology::covalent_table_energy(double * coords, bool * moved, covalent_t
 /*this assumes only one fragment has been moved.*/
 //check nonbond list.  We only need to count interactions between moved and non-moved fragments,
 //since each move is a rigid transformation of the moved fragments.
+#ifdef SEDDD
+void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot)
+#else
 void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot)
+#endif
 {
     double energy;
     int i,j,jfrag,ifrag;
@@ -200,7 +204,11 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
     //    if (j!=imoved){
     do_bonds=((movetype==MOVE_HEAVY_TRANS) || (movetype==MOVE_HEAVY_ROT));
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
+#ifdef SEDDD
+    ffield->moved_non_tabulated_energy(&solvation_params,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
+#else
     ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
+#endif
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
@@ -233,13 +241,21 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
 }
 
 //this only works on "new" coordinates.
-void simulation::total_energy( double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot)
+#ifdef SEDDD
+void simulation::total_energy( double * coords, std::vector<atom_nb_entry> * pair_list,  double * frac_volumes, double * energies, double * etot)
+#else
+void simulation::total_energy( double * coords, std::vector<atom_nb_entry> * pair_list,  double * energies, double * etot)
+#endif
 {
     int i,j,itype,jtype;
     double energy, inte, evdwint, eelecint;
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
     //if (en_by_table!=NULL) for (itype=0; itype<top->nfragtypes*top->nfragtypes; itype++) en_by_table[itype]=0.0;
+#ifdef SEDDD
+    ffield->non_tabulated_energy(&solvation_params,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
+#else
     ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,energies);
+#endif
 #ifdef TIMERS
     switch_timer(TIMER_GO);
 #endif
@@ -467,8 +483,10 @@ void simulation::mcloop(void)
     if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,oldcoords);
 #ifdef SEDDD
     top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,oldcoords,old_frac_volumes,ffield);
-#endif
+    total_energy(oldcoords,&old_pair_list,old_frac_volumes,fresh_energies,&fresh_energy);
+#else
     total_energy(oldcoords,&old_pair_list,fresh_energies,&fresh_energy);
+#endif
     print_energies(stdout,TRUE,"Energy:",0,fresh_energies,fresh_energy);
     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
     cum_energy=fresh_energy;
@@ -482,10 +500,19 @@ void simulation::mcloop(void)
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
          for (i=0; i<top->natom; i++) if (movedatoms[i]) att_by_atom[i]++;
-         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,oldenergies,&eold);
+#ifdef SEDDD
+         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,old_frac_volumes,oldenergies,&eold);
+#else
+         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,old_frac_volumes,&eold);
+#endif
          if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
          //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
-         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,newenergies,&enew);
+#ifdef SEDDD
+         top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
+         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,new_frac_volumes,newenergies,&enew);
+#else
+         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,new_frac_volumes,&enew);
+#endif
          de=enew-eold;
          //fresh_energy=total_energy(newcenter,neworient);
          //de2=fresh_energy-cum_energy;
@@ -505,6 +532,7 @@ void simulation::mcloop(void)
                  for (k=0; k<3; k++) oldcoords[3*i+k]=newcoords[3*i+k];
              }
              old_pair_list=new_pair_list;
+             for (i=0; i<top->natom; i++) old_frac_volumes[i]=new_frac_volumes[i];
              //if (de<=-0.5*DUMMY_ENERGY) cum_energy=total_energy(); //This guards against numerical errors related to "declashing."
          } else {
              //REJECTED
@@ -541,7 +569,11 @@ void simulation::mcloop(void)
              //fflush(quatoutput);
              //fresh_energy=total_energy();
              //print_energies(FALSE,"Cum: ",istep,cum_energies,cum_energy);
+#ifdef SEDDD
+             total_energy(newcoords,&new_pair_list,new_frac_volumes,fresh_energies,&fresh_energy);
+#else
              total_energy(newcoords,&new_pair_list,fresh_energies,&fresh_energy);
+#endif
              print_energies(stdout,FALSE,"Energy:",istep,fresh_energies,fresh_energy);
              deviation=cum_energy-fresh_energy;
              printf("Energy deviation: %.6f kcal/mol\n",deviation);

@@ -81,6 +81,7 @@ void read_solvation_params(char * line, seddd_params * params)
     int iclass;
     double vol, thickness;
     sscanf(line,"%lg %lg %lg %s",&params->eps0,&params->eps1,&params->c,fname);
+    params->delta_eps=params->eps1-params->eps0;
     input=fopen(fname,"r");
     if (input==NULL) {
         printf("Could not open file %s\n",fname);

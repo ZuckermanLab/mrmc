@@ -120,8 +120,13 @@ private:
     void write_frame_quat(FILE * output, long int istep, double * center, double * orient);
     void copy_frag(int ifrag, double * center1, double * orient1, double * coords1, double * center2, double * orient2, double * coords2);
     //double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
+#ifdef SEDDD
+    void moved_energy(int movetype,subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot);
+    void total_energy(double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot);
+#else
     void moved_energy(int movetype,subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
     void total_energy(double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
+#endif
     void ligand_energies(double * coords, double * total_internal_energy, double * internal_energies, double * total_intxn_energy, double * intxn_energies);
     bool update_pair_list_if_needed(long int istep, double * coords);
     void read_restart(char * fname);

@@ -328,7 +328,12 @@ void simulation::process_commands(char * infname)
             strncpy(word,token,sizeof(word));
             if (strcasecmp(word,"TOTAL")==0) {
                 top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,initcoords);
+#ifdef SEDDD
+                top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,initcoords,old_frac_volumes,ffield);
+                total_energy(initcoords,&old_pair_list,old_frac_volumes,energies,&etot);
+#else
                 total_energy(initcoords,&old_pair_list,energies,&etot);
+#endif
                 print_energies(stdout,true,"Energy:",0,energies,etot);
             } else if (strcasecmp(word,"LIGAND")==0) {
                 ligand_energies(oldcoords,&total_internal_energy,internal_energies,&total_intxn_energy,intxn_energies);
@@ -582,8 +587,10 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,private_coords2);
 #ifdef SEDDD
         top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,private_coords2,old_frac_volumes,ffield);
-#endif
+        total_energy(private_coords2,&old_pair_list,old_frac_volumes,energies,&etot);
+#else
         total_energy(private_coords2,&old_pair_list,energies,&etot);
+#endif
         if (etot<best_etot) {
             //if lower energy than best so far, save it
             best_etot=etot;
@@ -715,13 +722,21 @@ void topology::load_covalent_tables(const char * covtablefmt, covalent_table * *
 void simulation::ligand_energies(double * coords, double * total_internal_energy, double * internal_energies, double * total_intxn_energy, double * intxn_energies)
 {
     int i;
+    double * frac_volumes;
     std::vector<atom_nb_entry> pair_list, solv_list;
     for (i=0; i<EN_TERMS; i++) {
         internal_energies[i]=0.0;
         intxn_energies[i]=0.0;
     }
     top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,&solv_list,coords);
+#ifdef SEDDD
+    frac_volumes = (double *) checkalloc(top->natom,sizeof(double));
+    top->calculate_solvation_volumes(&solvation_params,cutoff2,&solv_list,coords,frac_volumes,ffield);
+    ffield->subset_energy(&solvation_params,cutoff2,top->natom,top->atoms,top->ligand,old_pair_list.size(),&pair_list[0],coords,frac_volumes,internal_energies,intxn_energies);
+    free(frac_volumes);
+#else
     ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,old_pair_list.size(),&pair_list[0],coords,internal_energies,intxn_energies);
+#endif
     *total_internal_energy=0.0;
     *total_intxn_energy=0.0;
     for (i=0; i<EN_TERMS; i++) {
@@ -762,7 +777,12 @@ void simulation::energy_analysis(char * type, char * fname,  char * enfname)
             if (feof(input)) break;
             if (strcasecmp(type,"TOTAL")==0) {
                 top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,initcoords);
+#ifdef SEDDD
+                top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,initcoords,old_frac_volumes,ffield);
+                total_energy(initcoords,&old_pair_list,old_frac_volumes,energies,&etot);
+#else
                 total_energy(initcoords,&old_pair_list,energies,&etot);
+#endif
                 print_energies(enoutput,true,"Energy:",0,energies,etot);
             } else if (strcasecmp(type,"LIGAND")==0) {
                 ligand_energies(oldcoords,&total_internal_energy,internal_energies,&total_intxn_energy,intxn_energies);

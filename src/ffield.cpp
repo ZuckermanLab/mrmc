@@ -2,6 +2,9 @@
 #include "ffield.h"
 #include "util.h"
 #include "rotations.h"
+#ifdef SEDDD
+#include "seddd.h"
+#endif
 //#include "solvation.h"
 
 //Outside this limit on dot product, dihedrals will be 1
@@ -587,7 +590,11 @@ inline bool term_needed(subset& movedatoms, const int a, const int b, const int 
 //Therefore, we don't need bonds at all, and we only need terms that cross the boundary between moved/unmoved fragments.
 //Also includes all non-tabulated interaction terms.
 //To do: incorporate cutoff into nonbond calculation.
+#ifdef SEDDD
+void forcefield::moved_non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * energies)
+#else
 void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
+#endif
 {
   int i,j,k;
   int ij;
@@ -603,6 +610,10 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   double en;
   double evdw,evdw2,eelec; /*for corrections*/
   bool is14;
+#ifdef SEDDD
+  double s_kl, eps;
+#endif
+
   //zero out all energy terms excapt interactions, which may have been previously calculated
 
   //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
@@ -702,7 +713,7 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   for (i=0; i<nb_atom_list_size; i++) {
       iatom=nb_atom_list[i].iatom;
       jatom=nb_atom_list[i].jatom;
-      if (!(movedatoms[iatom]^movedatoms[jatom])) continue;
+      //if (!(movedatoms[iatom]^movedatoms[jatom])) continue;
       //todo: figure out a way to determine 1-4 relationships on the fly
       is14=nb_atom_list[i].is14;
       dx=coords[3*jatom]-coords[3*iatom];
@@ -713,7 +724,14 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
 #ifdef TIMERS
       switch_timer(TIMER_NT_VDW_ELEC);
 #endif
+#ifdef SEDDD
+      nonbond_energy(true,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec); //does not take into account epsilon, just computes qi*qj/r2
+      s_kl=params->c*(frac_volumes[iatom]+frac_volumes[jatom]); //eq. 2 from Garden and Zhorov paper
+      eps=params->eps0+(1.0-s_kl)*params->delta_eps; //eq. 1
+      eelec/=eps;
+#else
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
+#endif
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
 #ifdef DEBUG
@@ -723,15 +741,22 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       switch_timer(TIMER_NT_PRECUTOFF);
 #endif
   }
+#ifdef SEDDD
+  energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST;
+#else
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST/eps;
+#endif
 #ifdef TIMERS
   switch_timer(TIMER_OTHER);
 #endif
 }
 
 
-
-void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies)
+#ifdef SEDDD
+void forcefield::non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * frac_volumes, double * energies)
+#else
+void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies)
+#endif
 {
   int i,j,k;
   int ij;
@@ -746,6 +771,9 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
   double r2,r6;
   double evdw, eelec;
   bool is14;
+#ifdef SEDDD
+  double s_kl, eps;
+#endif
   //zero out all energy terms excapt interactions, which may have been previously calculated
 
   //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
@@ -844,18 +872,33 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double cutoff2, int 
       dz=coords[3*jatom+2]-coords[3*iatom+2];
       r2=dx*dx+dy*dy+dz*dz;
       if (r2>cutoff2) continue;
+#ifdef SEDDD
+      nonbond_energy(true,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec); //does not take into account epsilon, just computes qi*qj/r2
+      s_kl=params->c*(frac_volumes[iatom]+frac_volumes[jatom]); //eq. 2 from Garden and Zhorov paper
+      eps=params->eps0+(1.0-s_kl)*params->delta_eps; //eq. 1
+      eelec/=eps;
+#else
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
+#endif
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
 #ifdef DEBUG
       printf("Nonbonded interaction (total): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
 #endif
   }
+#ifdef SEDDD
+  energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST;
+#else
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST/eps;
+#endif
 }
 
 //This calculates the internal energies within "subset" and interaction energies separately.
+#ifdef SEDDD
+void forcefield::subset_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& atomset, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * internal_energies, double * intxn_energies)
+#else
 void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& atomset, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * internal_energies, double * intxn_energies)
+#endif
 {
   int i,j,k;
   int ij;
@@ -871,6 +914,9 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
   double en;
   double evdw,evdw2,eelec; /*for corrections*/
   bool is14;
+#ifdef SEDDD
+  double s_kl, eps;
+#endif
   //zero out all energy terms excapt interactions, which may have been previously calculated
 
   //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
@@ -991,7 +1037,14 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
 #ifdef TIMERS
       switch_timer(TIMER_NT_VDW_ELEC);
 #endif
+#ifdef SEDDD
+      nonbond_energy(true,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec); //does not take into account epsilon, just computes qi*qj/r2
+      s_kl=params->c*(frac_volumes[iatom]+frac_volumes[jatom]); //eq. 2 from Garden and Zhorov paper
+      eps=params->eps0+(1.0-s_kl)*params->delta_eps; //eq. 1
+      eelec/=eps;
+#else
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
+#endif
       if (atomset[iatom] && atomset[jatom]) {
           internal_energies[EN_VDW_EXACT]+=evdw;
           internal_energies[EN_ELEC_EXACT]+=eelec;
@@ -1006,8 +1059,12 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
       switch_timer(TIMER_NT_PRECUTOFF);
 #endif
   }
-  internal_energies[EN_ELEC_EXACT]=internal_energies[EN_ELEC_EXACT]*COUL_CONST/eps;
-  intxn_energies[EN_ELEC_EXACT]=intxn_energies[EN_ELEC_EXACT]*COUL_CONST/eps;
+  internal_energies[EN_ELEC_EXACT]=internal_energies[EN_ELEC_EXACT]*COUL_CONST;
+  intxn_energies[EN_ELEC_EXACT]=intxn_energies[EN_ELEC_EXACT]*COUL_CONST;
+#ifndef SEDDD
+  internal_energies[EN_ELEC_EXACT]/=eps;
+  intxn_energies[EN_ELEC_EXACT]/=eps;
+#endif
 #ifdef TIMERS
   switch_timer(TIMER_OTHER);
 #endif
