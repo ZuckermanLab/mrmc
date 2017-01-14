@@ -1,0 +1,46 @@
+  #####################################################             
+   ##                                                 ##
+   ##  TINKER Atom Class Numbers to Amber Atom Types  ##
+   ##                                                 ##             
+   ##    1  CT      11  CN      21  OW      31  HO    ##
+   ##    2  C       12  CK      22  OH      32  HS    ##                
+   ##    3  CA      13  CQ      23  OS      33  HA    ##               
+   ##    4  CM      14  N       24  O       34  HC    ##
+   ##    5  CC      15  NA      25  O2      35  H1    ##
+   ##    6  CV      16  NB      26  S       36  H2    ##                 
+   ##    7  CW      17  NC      27  SH      37  H3    ##               
+   ##    8  CR      18  N*      28  P       38  HP    ##              
+   ##    9  CB      19  N2      29  H       39  H4    ##
+   ##   10  C*      20  N3      30  HW      40  H5    ##            
+   ##                                                 ##         
+   #####################################################
+#each one is the TINKER parameter number, AMBER atom type name, hydration volume (A^3), hydration shell thickness (A)
+1 CT 22.2 3.5 #EEF1 has different params for CT1/CT2/CT3, in amber all aliphatic C's are the same, chose CT2 as most common
+2 C 14.7 3.5 #carbonyl carbon
+3 CA 18.4 3.5 #various sp2 hybrid C's in aromatic rings
+4 CM 18.4 3.5
+5 CC 18.4 3.5
+6 CV 18.4 3.5
+7 CW 18.4 3.5
+8 CR 18.4 3.5
+9 CB 18.4 3.5
+10 C* 18.4 3.5
+11 CN 18.4 3.5
+12 CK 18.4 3.5
+13 CQ 18.4 3.5
+14 N 4.4 3.5 #peptide nitrogen
+15 NA 4.4 3.5 #TRP pyrrole N
+16 NB 4.4 3.5
+17 NC 4.4 3.5
+18 N* 4.4 3.5
+19 N2 11.2 6.0 #ARG guanidinium N
+20 N3 11.2 6.0 #LYS side chain N
+21 OW 14.0 3.5 #TIP3P water, don't have any of those
+22 OH 10.8 3.5 #SER/THR hydroxyl
+23 OS 10.8 3.5 #sugar hydroxyl
+24 O 10.8 3.5 #peptide carbonyl oxygen
+25 O2 10.8 6.0 #ASP/GLU carboxyl oxygen
+26 S 14.7 3.5 #disulfide, MET S
+27 SH 14.7 3.5 #CYS S, same type as other sulfurs in CHARMM
+28 P 0.0 0.0 #check to make sure the drugs don't have phosphorus
+#also need: F

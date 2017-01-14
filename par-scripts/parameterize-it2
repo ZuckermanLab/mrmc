@@ -8,8 +8,9 @@ export PYTHONPATH=~/lib/python:$PYTHONPATH
 drugu=`echo $drug | awk '{print toupper($0)}'`
 #on the compute nodes "python" points to "/usr/bin/python" which doesn't seem to be able to handle parmed
 /usr/local/bin/python ../convert-to-tinker.py $drug.prm7 2501 51 $drug.prm
-/usr/local/bin/python ../create-defs2.py $drug.prm7 $drugu 2501 defs-$drug.txt
+/usr/local/bin/python ../create-defs-solvation.py $drug.prm7 $drugu 2501 defs-$drug.txt 51 solv-$drug.txt
 #append amber parameters and definitions to create a complete parameter set for the protein-ligand system
 cat ../amber99sb.prm $drug.prm > amber99sb-$drug.prm
 cat ../defs-amber99sb.txt defs-$drug.txt > defs-amber99sb-$drug.txt
+cat ../solvpar-seddd.txt solv-$drug.txt > solvpar-seddd-$drug.txt
 cd ..
