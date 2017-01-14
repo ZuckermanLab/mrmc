@@ -13,6 +13,7 @@
 #include "util.h"
 #include "ffield.h"
 #include "topology.h"
+#include "seddd.h" //for #define SEDDD
 //#include "covalent_tables.h"
 #ifdef __unix__
 #include <sys/time.h>
@@ -463,7 +464,10 @@ void simulation::mcloop(void)
 #endif
     printf("Starting Monte Carlo at %s\n",ctime(&start));
     starttime=clock();
-    if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,oldcoords);
+    if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,oldcoords);
+#ifdef SEDDD
+    top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,oldcoords,old_frac_volumes,ffield);
+#endif
     total_energy(oldcoords,&old_pair_list,fresh_energies,&fresh_energy);
     print_energies(stdout,TRUE,"Energy:",0,fresh_energies,fresh_energy);
     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
@@ -479,7 +483,7 @@ void simulation::mcloop(void)
          natt[movetype]++;
          for (i=0; i<top->natom; i++) if (movedatoms[i]) att_by_atom[i]++;
          moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,oldenergies,&eold);
-         if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,newcoords);
+         if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
          //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
          moved_energy(movetype,movedatoms,newcoords,&new_pair_list,newenergies,&enew);
          de=enew-eold;
@@ -508,6 +512,7 @@ void simulation::mcloop(void)
                  for (k=0; k<3; k++) newcoords[3*i+k]=oldcoords[3*i+k];
              }
              new_pair_list=old_pair_list;
+             new_solv_list=old_solv_list;
          }
          if (mc_log!=NULL) {
              //Log file: step number, move type, deltaU, probability, accepted?, "*"...
@@ -524,7 +529,7 @@ void simulation::mcloop(void)
                 write_dcd_frame(xyzoutput,newcoords);
              } else if (strcasecmp(trajfmt,"PDB")==0) {
                 fprintf(xyzoutput,"MODEL     %4d\n",istep/nsave);
-                top->write_pdb_stream(xyzoutput,newcoords);
+                top->write_pdb_stream(xyzoutput,newcoords,new_frac_volumes);
                 fprintf(xyzoutput,"ENDMDL\n");
              }
              //write_frame_quat(quatoutput,istep,newcenter,neworient);
@@ -572,7 +577,7 @@ void simulation::mcloop(void)
          }
 #ifdef EXCHANGE
          if ((istep%exchfreq)==0) {
-		exchange(istep/exchfreq,cum_energies,&cum_energy,newcenter,neworient,newcoords);
+                exchange(istep/exchfreq,cum_energies,&cum_energy,newcenter,neworient,newcoords);
 		//print_energies(stdout,FALSE,"Cum: ",istep,cum_energies,cum_energy);
                 total_energy(newcenter,neworient,newcoords,fresh_energies,&fresh_energy);
              	//print_energies(stdout,FALSE,"Energy:",istep,fresh_energies,fresh_energy);

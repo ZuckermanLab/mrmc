@@ -6,6 +6,7 @@
 //#include "solvation.h"
 #include "ffield.h"
 #include "topology.h"
+#include "seddd.h"
 #include "util.h"
 
 
@@ -91,7 +92,7 @@ struct topology {
     //int nfragtypes;
     //fragmenttype * * fragtypes; //[MAX_FRAGMENT_TYPES];
     /*number of actual fragments, total number of atoms*/
-    int natom,nseg,nres,nscrot;
+    int natom,nseg,nres,nscrot,ngroup;
     /*which type of fragments each fragment is*/
     //fragment * frags; //[MAX_FRAGMENTS];
     //virtual_site * virtual_sites;
@@ -117,6 +118,7 @@ struct topology {
     subset aaregion_res;//, aaregion_atoms;
     int ligand_res;
     std::vector<atom_nb_entry> * orig_pair_list_by_res;
+    std::vector<atom_nb_entry> * orig_solv_list_by_res; //contain only heavy atom pairs
 
     //int * whichseg;
     topology(const char * commandfile, forcefield * ffield);
@@ -132,18 +134,18 @@ struct topology {
     //void addseg(int nsegres, char * seq);
     void print_detailed_info(subset aaregion_res);
     void print_summary_info(void);
-    void insert_residue(const char * res);
+    void insert_residue(const char * res, forcefield * ffield);
     void link_fragments(void);
     void create_angle_dihedral_lists(bool using_cov_tables);
     void create_improper_dihedral_lists(bool using_cov_tables, forcefield * ffield);
     void create_non_tab_list(void);
-    void create_pair_list(bool pbc, double halfboxsize, double boxsize, double listcutoff, std::vector<atom_nb_entry> * pair_list, double * coords);
+    void create_pair_list(bool pbc, double halfboxsize, double boxsize, double listcutoff, std::vector<atom_nb_entry> * pair_list,std::vector<atom_nb_entry> * solv_list, double * coords);
     bool use_covalent_table(int itype, int jtype);
 /*    bool term_in_covalent_tables(int iatom, int jatom);
     bool term_in_covalent_tables(int iatom, int jatom, int katom);
     bool term_in_covalent_tables(int iatom, int jatom, int katom, int latom);*/
     //void create_nb_atom_exact_list(int exact, int nb_list_per_frag, int * nb_list_count, int * nonbond_list, std::vector<atom_nb_entry> * atom_nb_list);
-    void add_segment(char chain, const char * sequence);
+    void add_segment(char chain, const char * sequence, forcefield * ffield);
     void assemble_fragments(double * orig_coords, double * center, double * orient, double * new_coords);
     void fit_all_fragments(double * orig_coords, double * center, double * orient, double * new_coords, double * rmsds);
     //void load_tables(const char * fmt, const char * fragfmt, table * * tables);
@@ -157,8 +159,8 @@ struct topology {
     //I/O routines.
     void read_pdb_stream(FILE * input, double * coords, subset& valid_coords);
     void read_pdb_file(char * fname, double * coords, subset& valid_coords);
-    void write_pdb_stream(FILE * output, double * coords);
-    void write_pdb_file(char * fname, double * coords);
+    void write_pdb_stream(FILE * output, double * coords, double * extra);
+    void write_pdb_file(char * fname, double * coords, double * extra);
     void write_pqr_file(char * fname, double * coords, int ichargedfrag, forcefield * ffield);
     void write_psf_file(char * fname, forcefield * ffield);
     //Monte Carlo move generation.
@@ -180,6 +182,9 @@ struct topology {
     double born_solvation_energy1(forcefield * ffield, int ifrag, int jfrag, double tau, double * coords, double * per_atom_born_radii);
     double born_solvation_energy2(forcefield * ffield, int ifrag, int jfrag, double tau, double rkl2, double * coords, double xx);
     double born_solvation_energy4(forcefield * ffield, int ifrag, int jfrag, double tau, double rkl2, double * coords, double akal);*/
+#ifdef SEDDD
+    void calculate_solvation_volumes(seddd_params * params, double cutoff2, std::vector<atom_nb_entry> * solv_list, double * coords, double * frac_volumes, forcefield * ffield);
+#endif
 };
 
 #endif // TOPOLOGY_H_INCLUDED

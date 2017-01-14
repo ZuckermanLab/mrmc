@@ -101,12 +101,13 @@ void topology::read_pdb_stream(FILE * input, double * coords, subset& valid_coor
     }*/
 }
 
-void topology::write_pdb_stream(FILE * output, double * coords)
+//extra is an array of values for atoms for writing in the b-factors column.
+void topology::write_pdb_stream(FILE * output, double * coords, double * extra)
 {
     const char * pdbfmt = "ATOM  %5d %4.4s %3.3s %c%4d    %8.3f%8.3f%8.3f%6.2f%6.2f\n";
     int iatom,ires,iseg,mainfragcount,scfragcount;
     char chain;
-    double color;
+    double val;
     mainfragcount=0;
     scfragcount=0;
     for (iatom=0; iatom<natom; iatom++) {
@@ -117,27 +118,14 @@ void topology::write_pdb_stream(FILE * output, double * coords)
             chain=chaincodes[iseg];
             ires=ires-segstart[iseg];
         }
-        color=0.0;
-        //color main-chain and side-chain fragments separately
-        if ((iatom>0) && (atoms[iatom].fragment!=atoms[iatom-1].fragment)) {
-            if (!atoms[iatom].is_backbone) {
-                scfragcount++;
-            } else {
-                mainfragcount++;
-            }
-        }
-        if (!atoms[iatom].is_backbone) {
-            color=(double) (scfragcount%2)+4.0;
-        } else {
-            color=(double) (mainfragcount%2);
-	}
+        if (extra==NULL) val=0.0; else val=extra[iatom];
         //indices are zero-based, add 1 to each
         fprintf(output,pdbfmt,iatom+1,atoms[iatom].name,atoms[iatom].resName,chain,ires+1,
-            coords[3*iatom],coords[3*iatom+1],coords[3*iatom+2],1.0,color);
+            coords[3*iatom],coords[3*iatom+1],coords[3*iatom+2],1.0,val);
     }
 }
 
-void topology::write_pdb_file(char * fname, double * coords)
+void topology::write_pdb_file(char * fname, double * coords, double * extra)
 {
     FILE * f;
     f=fopen(fname,"w");
@@ -146,7 +134,7 @@ void topology::write_pdb_file(char * fname, double * coords)
         die();
     }
     fprintf(f,"REMARK %s\n",origin);
-    write_pdb_stream(f,coords);
+    write_pdb_stream(f,coords,extra);
     fprintf(f,"END\n");
     fclose(f);
 }

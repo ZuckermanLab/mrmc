@@ -306,10 +306,11 @@ void topology::print_detailed_info(subset aaregion_res)
     }
 */
     //Atom info
-    printf("index, res. number, atom name, type, class, list of bonded atoms\n");
+    printf("index, res. number, atom name, type, class, list of evaluable bonded atoms, list of toatl bonded atoms\n");
     for (iatom=0; iatom<natom; iatom++) {
         printf("%d, %d, %s, %d, %d, ",iatom,atoms[iatom].resNum,atoms[iatom].name,atoms[iatom].type,atoms[iatom].classx);
         for (ibond=0; ibond<atoms[iatom].numOfBondedAtoms; ibond++) printf("%d ",atoms[iatom].bondedAtomList[ibond]);
+
         printf("\n");
     }
 
@@ -329,9 +330,10 @@ void topology::print_summary_info(void)
 
 
 //aaregion_res must be set before calling add_segment or insert_residue.
-void topology::insert_residue(const char * res)
+void topology::insert_residue(const char * res, forcefield * ffield)
 {
     int nnewfrag,nnewatom,nnewscrot,ifrag,restype,iatom,jatom,ibond,itype,ires,iactualatom,nfragbonded;
+    bool evaluable;
     //int fragbonded[6]; //max bonds per atom, should be a constant
     //fragmenttype * ftype;
     restype=resdefbyname(res);
@@ -365,6 +367,9 @@ void topology::insert_residue(const char * res)
         atoms[natom].is_backbone=((strncmp(atoms[natom].name,"N",sizeof(atoms[natom].name))==0) ||
                                     (strncmp(atoms[natom].name,"CA",sizeof(atoms[natom].name))==0) ||
                                     (strncmp(atoms[natom].name,"C",sizeof(atoms[natom].name))==0));
+	atoms[natom].classx=ffield->atomTypeLookUp[atoms[natom].type].classx;
+        atoms[natom].atomicNum=ffield->atomTypeLookUp[atoms[natom].type].atomicNum;
+        atoms[natom].mass=ffield->atomTypeLookUp[atoms[natom].type].mass;
         natom++;
     }
 /*
@@ -446,12 +451,13 @@ void topology::insert_residue(const char * res)
             die();
         }
         //Only add backbone bonds if not in the all-atom region.
-        if (aaregion_res[nres] || (atoms[iatom].is_backbone && atoms[jatom].is_backbone)) {
-            atoms[iatom].bondedAtomList[atoms[iatom].numOfBondedAtoms]=jatom;
-            atoms[iatom].numOfBondedAtoms++;
-            atoms[jatom].bondedAtomList[atoms[jatom].numOfBondedAtoms]=iatom;
-            atoms[jatom].numOfBondedAtoms++;
-        }
+	evaluable=(aaregion_res[nres] || (atoms[iatom].is_backbone && atoms[jatom].is_backbone));
+        atoms[iatom].bondedAtomList[atoms[iatom].numOfBondedAtoms]=jatom;
+	atoms[iatom].evaluableBond[atoms[iatom].numOfBondedAtoms]=evaluable;
+        atoms[iatom].numOfBondedAtoms++;
+        atoms[jatom].bondedAtomList[atoms[jatom].numOfBondedAtoms]=iatom;
+        atoms[jatom].evaluableBond[atoms[jatom].numOfBondedAtoms]=evaluable;
+        atoms[jatom].numOfBondedAtoms++;
         //If the bond is rotatable, include it in appropriate list.  This information is used to generate Monte Carlo moves.
         if (resdef[restype].rottype[ibond]==RT_BACKBONE) {
             resinfo[nres].ibbrot[resinfo[nres].nbbrot]=iatom;
@@ -570,7 +576,7 @@ int topology::is_bonded(int ifrag, int jfrag)
 */
 
 //aaregion_res must be set before calling add_segment or insert_residue.
-void topology::add_segment(char chain, const char * sequence)
+void topology::add_segment(char chain, const char * sequence, forcefield * ffield)
 {
     char * token;
     char * buf;
@@ -588,7 +594,7 @@ void topology::add_segment(char chain, const char * sequence)
     buf[strlen(sequence)]='\0';
     token=strtok(buf,delim);
     while (token!=NULL) {
-        insert_residue(token);
+        insert_residue(token,ffield);
         token=strtok(NULL,delim);
     }
     segend[nseg]=nres-1;
@@ -752,8 +758,9 @@ void topology::create_angle_dihedral_lists(bool using_cov_tables)
         atoms[iatom].numOfBonded14Atoms=0;
         //atoms[iatom].numOfNonBondedAtoms=0;
     }
+    //All bonds involved in the angle, dihedral, etc. must be "evaluable" for the angle, dihedral, etc. to be generated.
     for(iatom=0;iatom<natom;iatom++){
-        for(j=0;j<atoms[iatom].numOfBondedAtoms;j++){
+        for(j=0;j<atoms[iatom].numOfBondedAtoms;j++) if (atoms[iatom].evaluableBond[j]) {
             jatom=atoms[iatom].bondedAtomList[j];
 /*
       ifrag=atoms[iatom].fragment;
@@ -761,7 +768,7 @@ void topology::create_angle_dihedral_lists(bool using_cov_tables)
       closefragments[ifrag*nfrag+jfrag]=true;
       closefragments[jfrag*nfrag+ifrag]=true;
 */
-            for(k=0;k<atoms[jatom].numOfBondedAtoms;k++){
+            for(k=0;k<atoms[jatom].numOfBondedAtoms;k++) if (atoms[jatom].evaluableBond[k]) {
                 katom=atoms[jatom].bondedAtomList[k];
                 if(katom!=iatom){
 /*
@@ -798,12 +805,12 @@ void topology::create_angle_dihedral_lists(bool using_cov_tables)
 
     //now take care of 1-4 bonded atoms
   for(iatom=0;iatom<natom;iatom++){
-    for(j=0;j<atoms[iatom].numOfBondedAtoms;j++){
+    for(j=0;j<atoms[iatom].numOfBondedAtoms;j++) if (atoms[iatom].evaluableBond[j]) {
       jatom=atoms[iatom].bondedAtomList[j];
-      for(k=0;k<atoms[jatom].numOfBondedAtoms;k++){
+      for(k=0;k<atoms[jatom].numOfBondedAtoms;k++) if (atoms[jatom].evaluableBond[k]) {
         katom=atoms[jatom].bondedAtomList[k];
         if(katom!=iatom){
-            for(m=0;m<atoms[katom].numOfBondedAtoms;m++){
+            for(m=0;m<atoms[katom].numOfBondedAtoms;m++) if (atoms[katom].evaluableBond[m]) {
                 matom=atoms[katom].bondedAtomList[m];
                 if(matom!=jatom){
                             //check for Pro ring if bonded1-4 is actually 1-3
@@ -875,7 +882,8 @@ void topology::create_improper_dihedral_lists(bool using_cov_tables, forcefield 
 	for(k=0;k<=2;k++){
 	  if(k!=j){
 	    for(m=0;m<=2;m++){
-	      if(m!=j && m!=k){
+              //all 3 bonds involved must be evaluable
+	      if(m!=j && m!=k && atoms[iatom].evaluableBond[j] && atoms[iatom].evaluableBond[k] && atoms[iatom].evaluableBond[m]) {
 		jatom = atoms[iatom].bondedAtomList[j];
 		katom = atoms[iatom].bondedAtomList[k];
 		matom = atoms[iatom].bondedAtomList[m];
@@ -968,96 +976,17 @@ void topology::create_improper_dihedral_lists(bool using_cov_tables, forcefield 
 }*/
 
 
-//Creates a list of the pairs of atoms that need to be evaluated exactly, without using the nonbond list.
-//We need to include (and mark) the 1,2 and 1,3 pairs so they will be counted in the GB sum.
-void topology::create_non_tab_list(void)
-{
-    int ifrag,jfrag,j,ii,jj,k,l,m,iatom,jatom,temp,ires,jres;
-    bool is12, is13, is14;
-    atom_nb_entry newentry;
-    //non_tab_list.clear();
-    //For every pair of fragments, including interactions between atoms in the same fragment.
-    /*for (ifrag=0; ifrag<nfrag; ifrag++)
-        for (jfrag=ifrag; jfrag<nfrag; jfrag++) {
-            //if they are not close and we are not doing an exact simulation, they will be calculated through the tables.
-            if (!(closefragments[ifrag*nfrag+jfrag])) continue;
-            //for every pair of atoms belonging to the two fragments...
-            for (ii=0; ii<fragtypes[frags[ifrag].type]->natom; ii++) {
-                for (jj=0; jj<fragtypes[frags[jfrag].type]->natom; jj++) {
-		    iatom=frags[ifrag].atoms[ii];
-                    jatom=frags[jfrag].atoms[jj];
-                    if ((ifrag==jfrag) && (iatom>=jatom)) continue;
-                    if (iatom>jatom) {
-                        temp=iatom;
-                        iatom=jatom;
-                        jatom=temp;
-                    }*/
-    orig_pair_list_by_res = (std::vector<atom_nb_entry> * ) checkalloc(nres*nres,sizeof(std::vector<atom_nb_entry>));
-    for (ires=0; ires<nres; ires++) for (jres=ires; jres<nres; jres++) orig_pair_list_by_res[ires*nres+jres].clear();
-    for (iatom=0; iatom<natom; iatom++)
-        for (jatom=iatom+1; jatom<natom; jatom++) {
-                    //include in list only if both atoms don't belong to the CG region
-                    if (!atoms[iatom].is_in_aa_region && !atoms[jatom].is_in_aa_region) continue;
-                    //iatom<jatom and check to see if 1-2, 1-3, or 1-4.
-                    is12=false;
-                    for (k=0; k<atoms[iatom].numOfBondedAtoms; k++)
-                        if (atoms[iatom].bondedAtomList[k]==jatom) {
-                            is12=true;
-                            break;
-                        }
-                    //if (is12) continue;
-                    is13=false;
-                    for (k=0; k<atoms[iatom].numOfAngles; k++)
-                        if (atoms[iatom].angleAtomList[3*k+2]==jatom) {
-                            is13=true;
-                            break;
-                        }
-                    //if (is13) continue;
-                    is14=false;
-                    for (k=0; k<atoms[iatom].numOfBonded14Atoms; k++)
-                        if (atoms[iatom].bonded14AtomList[4*k+3]==jatom) {
-                            is14=true;
-                            break;
-                        }
-                    //no 1-2 or 1-3 interactions
-                    if (is12 || is13) continue;
-                    /*if (using_cov_tables && term_in_covalent_tables(iatom,jatom)) {
-#ifdef DEBUG_NON_TABULATED
-                        printf("Skipping atom pair: %d %d\n",iatom,jatom);
-#endif
-                        continue;
-                    }*/
-#ifdef DEBUG_NON_TABULATED
-                    printf("Add atom pair %d %d %c\n",iatom,jatom,yesno(is14));
-#endif
-                    newentry.iatom=iatom;
-                    newentry.jatom=jatom;
-                    //newentry.is12_or_13=is12 || is13;
-                    newentry.is14=is14;
-                    //non_tab_list.push_back(newentry);
-                    ires=atoms[iatom].resNum;
-                    jres=atoms[jatom].resNum;
-                    if (ires>jres) {
-                       temp=ires;
-                       ires=jres;
-                       jres=temp;
-                    }
-                    orig_pair_list_by_res[ires*nres+jres].push_back(newentry);
-                }
-        /*    }
-        }*/
-    //printf("Number of atom pairs to be evaluated exactly: %ld\n",non_tab_list.size());
-}
-
-
 topology::~topology()
 {
-    int itype;
+    int i,itype;
 /*
     for (itype=0; itype<nfragtypes; itype++) delete fragtypes[itype];
     free(fragtypes);
     free(frags);
 */
+    //we really should induce the vector objects to free their memory, but not sure how to do this
+    free(orig_pair_list_by_res);
+    free(orig_solv_list_by_res);
     free(atoms);
     free(resdef);
     free(resinfo);

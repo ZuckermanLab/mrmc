@@ -74,9 +74,14 @@ typedef struct _atoms_ {
   int type;//this is tinker atom type
   int classx;//this is tinker atom class
   int atomicNum;//this is element's atomic number as in the Mendeleev's table
+  //The "evaluable" bonds do not include bonds involving the sidechain in the CG region.
   int numOfBondedAtoms;//this is from tinker xyz file, regular bonded1-2
   int bondedAtomList[6];
+  bool evaluableBond[6]; //This is a set of flags determining whether the bond is "evaluable."
   int bondedParamType[6];
+  //The "total" bonds include all bonds, regardless of where they are.
+  int total_numOfBondedAtoms;//this is from tinker xyz file, regular bonded1-2                                                                                                                           
+  int total_bondedAtomList[6];
   int numOfAngles;//these are regular bonded1-3 interactions
   int angleAtomList[3*20];
   int angleParamType[20];
@@ -110,10 +115,6 @@ typedef struct _atoms_ {
   double radius; //needed for solvation
   bool is_backbone; //is this atom part of the side chain?
   bool is_in_aa_region; //is this atom in the all-atom region?
-  //for solvation: solvation radius and scale factor
-  double rsolv;
-  double fs;
-  double P0, P1, P2, P3, P4;
 }ATOMS;
 //ATOMS atoms[MAX_NUM_OF_ATOMS];
 

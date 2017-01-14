@@ -67,6 +67,10 @@ simulation::~simulation()
     free(initcoords);
     free(oldcoords);
     free(newcoords);
+#ifdef SEDDD
+    free(old_frac_volumes);
+    free(new_frac_volumes);
+#endif
     /*free(oldcenter);
     free(oldorient);
     free(newcenter);
@@ -140,7 +144,7 @@ void simulation::process_commands(char * infname)
             token=strtok(NULL,delim);
             strncpy(fname,token,sizeof(fname));
             if (strcasecmp("PDB",fmt)==0) {
-                top->write_pdb_file(fname,initcoords);
+                top->write_pdb_file(fname,initcoords,old_frac_volumes); //if old_frac_volumes is not allocated, will write "0.0" in column.
             } else if (strcasecmp("PSF",fmt)==0) {
                 top->write_psf_file(fname,ffield);
             /*} else if (strcasecmp("REST",fmt)==0) {
@@ -276,10 +280,17 @@ void simulation::process_commands(char * infname)
             strncpy(word,token,sizeof(word));
             sscanf(word,"%lg %lg",&cutoff,&listcutoff);
             cutoff2=cutoff*cutoff;
+#ifdef SEDDD
+        } else if (strcasecmp("SEDDD",token)==0) {
+            token+=strlen(token)+1;
+            strncpy(word,token,sizeof(word));
+            read_solvation_params(word,&solvation_params);
+#else
         } else if (strcasecmp("EPS",token)==0) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
             sscanf(word,"%lg",&eps);
+#endif
         } else if (strcasecmp("SEED",token)==0) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
@@ -316,7 +327,7 @@ void simulation::process_commands(char * infname)
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
             if (strcasecmp(word,"TOTAL")==0) {
-                top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);
+                top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,initcoords);
                 total_energy(initcoords,&old_pair_list,energies,&etot);
                 print_energies(stdout,true,"Energy:",0,energies,etot);
             } else if (strcasecmp(word,"LIGAND")==0) {
@@ -386,8 +397,8 @@ void simulation::create_lists(void)
         for (i=0; i<nres; i++) aaregion_res+=i;
     }*/
     //Do we do the below stuff here or in finish_initialization?
-    top->add_segment(' ',sequence);
-    if (top->ligand_res>=0) top->add_segment(' ',ligand_resname);
+    top->add_segment(' ',sequence,ffield);
+    if (top->ligand_res>=0) top->add_segment(' ',ligand_resname,ffield);
     top->create_angle_dihedral_lists(false);
     top->create_non_tab_list();
     ffield->find_parameters(top->natom,top->atoms);
@@ -469,6 +480,11 @@ void simulation::finish_initialization(void)
     }
     printf("Number of monte carlo steps: %ld\n",nmcstep);
     printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
+    //need these arrays for energy calculations
+#ifdef SEDDD
+    old_frac_volumes=(double *) checkalloc(top->natom,sizeof(double));
+    new_frac_volumes=(double *) checkalloc(top->natom,sizeof(double));
+#endif
     initialized=true;
 }
 
@@ -563,7 +579,10 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
             //}
         }
         //check teh energy
-        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,private_coords2);
+        top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,private_coords2);
+#ifdef SEDDD
+        top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,private_coords2,old_frac_volumes,ffield);
+#endif
         total_energy(private_coords2,&old_pair_list,energies,&etot);
         if (etot<best_etot) {
             //if lower energy than best so far, save it
@@ -576,7 +595,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
 #ifdef MONITORPREDOCK
         fprintf(predock_poses,"REMARK random poses %d, total energy %g\n",isearch,etot);
         fprintf(predock_poses,"MODEL     %4d\n",isearch);
-        top->write_pdb_stream(predock_poses,private_coords2);
+        top->write_pdb_stream(predock_poses,private_coords2,old_frac_volumes);
         fprintf(predock_poses,"ENDMDL\n");
         fflush(predock_poses);
 #endif
@@ -696,12 +715,12 @@ void topology::load_covalent_tables(const char * covtablefmt, covalent_table * *
 void simulation::ligand_energies(double * coords, double * total_internal_energy, double * internal_energies, double * total_intxn_energy, double * intxn_energies)
 {
     int i;
-    std::vector<atom_nb_entry> pair_list;
+    std::vector<atom_nb_entry> pair_list, solv_list;
     for (i=0; i<EN_TERMS; i++) {
         internal_energies[i]=0.0;
         intxn_energies[i]=0.0;
     }
-    top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,coords);
+    top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&pair_list,&solv_list,coords);
     ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,old_pair_list.size(),&pair_list[0],coords,internal_energies,intxn_energies);
     *total_internal_energy=0.0;
     *total_intxn_energy=0.0;
@@ -742,7 +761,7 @@ void simulation::energy_analysis(char * type, char * fname,  char * enfname)
             top->read_pdb_stream(input,oldcoords,valid_coords);
             if (feof(input)) break;
             if (strcasecmp(type,"TOTAL")==0) {
-                top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,initcoords);
+                top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,initcoords);
                 total_energy(initcoords,&old_pair_list,energies,&etot);
                 print_energies(enoutput,true,"Energy:",0,energies,etot);
             } else if (strcasecmp(type,"LIGAND")==0) {

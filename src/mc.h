@@ -11,6 +11,7 @@
 #include "topology.h"
 #include "go_model.h"
 #include "util.h"
+#include "seddd.h"
 //#include "fragments.h"
 //#include "covalent_tables.h"
 //#include "nblist.h"
@@ -41,7 +42,10 @@ private:
     //covalent_table * * covalent_tables;
     //use_std_tables, use_cov_tables,
     bool pbc, interp, enwrite, rdie;//,do_mc,do_energy,do_dock;
-    double eps, cutoff, cutoff2, listcutoff, boxsize, halfboxsize, rmargin, tables_lambda;
+    double eps, cutoff, cutoff2, listcutoff, boxsize, halfboxsize;
+#ifdef SEDDD
+    seddd_params solvation_params;
+#endif
     char forcefieldfname[255],deffname[255];
     bool aaregion_specified, initialized;
     forcefield * ffield;
@@ -62,6 +66,10 @@ private:
     /*double * oldcenter;
     double * oldorient;*/
     double * oldcoords;
+#ifdef SEDDD
+    double * old_frac_volumes;
+    double * new_frac_volumes;
+#endif
     /*other data*/
     double beta; /*Monte Carlo temperature, expressed as beta*/
 
@@ -78,7 +86,7 @@ private:
     char * sequence;
     char ligand_resname[6];
     bool use_nb_list;
-    std::vector<atom_nb_entry> old_pair_list,new_pair_list;
+    std::vector<atom_nb_entry> old_pair_list,new_pair_list,old_solv_list,new_solv_list;
     double * last_nb_list_coords;
     float * xwrite; //the DCD file format requires single precision
     float * ywrite;

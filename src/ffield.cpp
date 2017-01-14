@@ -1048,12 +1048,13 @@ void forcefield::find_parameters(int numOfAtoms, ATOMS * atoms)
   }*/
 
   //fetch tinker atom class and atomic number for each atom
-  for(i=0;i<numOfAtoms;i++){
+  //do this in insert_residue, much easier
+  /*for(i=0;i<numOfAtoms;i++){
     atoms[i].classx=atomTypeLookUp[atoms[i].type].classx;
     atoms[i].atomicNum=atomTypeLookUp[atoms[i].type].atomicNum;
     atoms[i].mass=atomTypeLookUp[atoms[i].type].mass;
     //printf("atom: %d, type: %d, class: %d\n",i,atoms[i].type,atoms[i].classx);
-  }
+  }*/
 
   //fetch non-bonded params for each atom
   for(i=0;i<numOfAtoms;i++){
