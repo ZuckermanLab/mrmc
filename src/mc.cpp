@@ -191,7 +191,7 @@ double topology::covalent_table_energy(double * coords, bool * moved, covalent_t
 //check nonbond list.  We only need to count interactions between moved and non-moved fragments,
 //since each move is a rigid transformation of the moved fragments.
 #ifdef SEDDD
-void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot)
+void simulation::moved_energy(int movetype, subset& movedatoms, subset& changedvol, double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot)
 #else
 void simulation::moved_energy(int movetype, subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot)
 #endif
@@ -205,7 +205,7 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
     do_bonds=((movetype==MOVE_HEAVY_TRANS) || (movetype==MOVE_HEAVY_ROT));
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
 #ifdef SEDDD
-    ffield->moved_non_tabulated_energy(&solvation_params,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
+    ffield->moved_non_tabulated_energy(&solvation_params,cutoff2,top->natom,top->atoms,movedatoms,changedvol,do_bonds,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
 #else
     ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
 #endif
@@ -387,6 +387,7 @@ void simulation::mcloop(void)
     double oldenergies[EN_TERMS],newenergies[EN_TERMS],cum_energies[EN_TERMS],fresh_energies[EN_TERMS];
     //bool * moved;
     subset movedatoms;
+    subset changedvol; //which atoms have changed fractional volume
     double * backbone;
     double q[4],c[3],rmsd;
     clock_t starttime;
@@ -444,6 +445,7 @@ void simulation::mcloop(void)
     //moved = (bool *) checkalloc(top->nfrag,sizeof(bool));
     //movedatoms = (bool *) checkalloc(top->natom,sizeof(bool));
     movedatoms.init(top->natom);
+    changedvol.init(top->natom);
     backbone = (double *) checkalloc(top->natom,sizeof(double));
     for (i=0; i<top->natom; i++) if (strstr("N CA C",top->atoms[i].name)!=NULL) backbone[i]=1.0; else backbone[i]=0.0;
     //nb_atom_list=new std::vector<atom_nb_entry>;
@@ -503,11 +505,14 @@ void simulation::mcloop(void)
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
          for (i=0; i<top->natom; i++) if (movedatoms[i]) att_by_atom[i]++;
-	 if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
+         if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
 #ifdef SEDDD
-  	 top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
-         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,old_frac_volumes,oldenergies,&eold);
-         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,new_frac_volumes,newenergies,&enew);
+  	     top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
+  	     //Identify which atoms have had their exposure change, and use this info in the rules for which pairs of atoms to recalculate.
+  	     changedvol.init(top->natom);
+  	     for (i=0; i<top->natom; i++) if (fabs(new_frac_volumes[i]-old_frac_volumes[i])>solvation_params.frac_vol_tol) changedvol+=i;
+         moved_energy(movetype,movedatoms,changedvol,oldcoords,&old_pair_list,old_frac_volumes,oldenergies,&eold);
+         moved_energy(movetype,movedatoms,changedvol,newcoords,&new_pair_list,new_frac_volumes,newenergies,&enew);
 #else
          moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,oldenergies,&eold);
          moved_energy(movetype,movedatoms,newcoords,&new_pair_list,newenergies,&enew);

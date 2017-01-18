@@ -591,7 +591,7 @@ inline bool term_needed(subset& movedatoms, const int a, const int b, const int 
 //Also includes all non-tabulated interaction terms.
 //To do: incorporate cutoff into nonbond calculation.
 #ifdef SEDDD
-void forcefield::moved_non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * energies)
+void forcefield::moved_non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, subset& changedvol, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * energies)
 #else
 void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
 #endif
@@ -609,7 +609,7 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   double r2,r6;
   double en;
   double evdw,evdw2,eelec; /*for corrections*/
-  bool is14;
+  bool is14, dopair;
 #ifdef SEDDD
   double s_kl, eps;
 #endif
@@ -713,7 +713,12 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
   for (i=0; i<nb_atom_list_size; i++) {
       iatom=nb_atom_list[i].iatom;
       jatom=nb_atom_list[i].jatom;
-      //if (!(movedatoms[iatom]^movedatoms[jatom])) continue;
+      //Either: one of the atoms has had its fractional exposure changed, OR (one atom has moved but not both
+      dopair = (movedatoms[iatom]^movedatoms[jatom]);
+#ifdef SEDDD
+      dopair = dopair || changedvol[iatom] || changedvol[jatom];
+#endif // SEDDD
+      if (!dopair) continue;
       //todo: figure out a way to determine 1-4 relationships on the fly
       is14=nb_atom_list[i].is14;
       dx=coords[3*jatom]-coords[3*iatom];

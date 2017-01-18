@@ -121,7 +121,7 @@ private:
     void copy_frag(int ifrag, double * center1, double * orient1, double * coords1, double * center2, double * orient2, double * coords2);
     //double interaction_energy(int ifrag, int jfrag, double * center, double * orient,double * coords);
 #ifdef SEDDD
-    void moved_energy(int movetype,subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot);
+    void moved_energy(int movetype,subset& movedatoms, subset& changedvol, double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot);
     void total_energy(double * coords, std::vector<atom_nb_entry> * pair_list, double * frac_volumes, double * energies, double * etot);
 #else
     void moved_energy(int movetype,subset& movedatoms, double * coords, std::vector<atom_nb_entry> * pair_list, double * energies, double * etot);
