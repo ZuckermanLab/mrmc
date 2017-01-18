@@ -57,7 +57,7 @@ void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2
         }*/
         aux=(r-rj)/lambdaj;
         aux=exp(-aux*aux);
-        dvj==SCALE_FACTOR*voli*aux/(lambdaj*r2);
+        dvj=SCALE_FACTOR*voli*aux/(lambdaj*r2);
         frac_volumes[jatom]+=dvj;
         /*if (frac_volumes[jatom]>1.0) {
                 printf("warning: too high fractional solvation for atom %s %d %s = %.10f\n",atoms[jatom].resName,atoms[jatom].resNum+1,atoms[jatom].name,frac_volumes[jatom]);
@@ -80,7 +80,7 @@ void read_solvation_params(char * line, seddd_params * params)
     FILE * input;
     int iclass;
     double vol, thickness;
-    sscanf(line,"%lg %lg %lg %s",&params->eps0,&params->eps1,&params->c,fname);
+    sscanf(line,"%lg %lg %lg %lg %s",&params->eps0,&params->eps1,&params->c, &params->frac_vol_tol, fname);
     params->delta_eps=params->eps1-params->eps0;
     input=fopen(fname,"r");
     if (input==NULL) {
