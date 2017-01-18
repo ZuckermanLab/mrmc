@@ -497,21 +497,20 @@ void simulation::mcloop(void)
          switch_timer(TIMER_MC_MOVE);
 #endif
          mcmove(&movetype,&movedatoms,newcoords);
+#ifdef DEBUG
+         printf("Performing move %ld: %s\n",istep,mc_move_names[movetype]);
+#endif
          //eold=moved_energy(movedfrag,oldcenter,oldorient,oldcoords);
          natt[movetype]++;
          for (i=0; i<top->natom; i++) if (movedatoms[i]) att_by_atom[i]++;
+	 if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
 #ifdef SEDDD
+  	 top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
          moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,old_frac_volumes,oldenergies,&eold);
-#else
-         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,old_frac_volumes,&eold);
-#endif
-         if (use_nb_list) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
-         //moved_energy(moved,movedatoms,newcenter,neworient,newcoords,newenergies,&enew);
-#ifdef SEDDD
-         top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
          moved_energy(movetype,movedatoms,newcoords,&new_pair_list,new_frac_volumes,newenergies,&enew);
 #else
-         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,new_frac_volumes,&enew);
+         moved_energy(movetype,movedatoms,oldcoords,&old_pair_list,oldenergies,&eold);
+         moved_energy(movetype,movedatoms,newcoords,&new_pair_list,newenergies,&enew);
 #endif
          de=enew-eold;
          //fresh_energy=total_energy(newcenter,neworient);
@@ -532,6 +531,7 @@ void simulation::mcloop(void)
                  for (k=0; k<3; k++) oldcoords[3*i+k]=newcoords[3*i+k];
              }
              old_pair_list=new_pair_list;
+             old_solv_list=new_solv_list;
              for (i=0; i<top->natom; i++) old_frac_volumes[i]=new_frac_volumes[i];
              //if (de<=-0.5*DUMMY_ENERGY) cum_energy=total_energy(); //This guards against numerical errors related to "declashing."
          } else {
@@ -541,6 +541,7 @@ void simulation::mcloop(void)
              }
              new_pair_list=old_pair_list;
              new_solv_list=old_solv_list;
+             for (i=0; i<top->natom; i++) new_frac_volumes[i]=old_frac_volumes[i];
          }
          if (mc_log!=NULL) {
              //Log file: step number, move type, deltaU, probability, accepted?, "*"...

@@ -144,6 +144,7 @@ void simulation::process_commands(char * infname)
             token=strtok(NULL,delim);
             strncpy(fname,token,sizeof(fname));
             if (strcasecmp("PDB",fmt)==0) {
+                top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,initcoords,old_frac_volumes,ffield);
                 top->write_pdb_file(fname,initcoords,old_frac_volumes); //if old_frac_volumes is not allocated, will write "0.0" in column.
             } else if (strcasecmp("PSF",fmt)==0) {
                 top->write_psf_file(fname,ffield);
