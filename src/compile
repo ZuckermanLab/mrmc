@@ -2,7 +2,7 @@
 
 mpi=0
 #must specify a force field
-defines="-DAMBER"
+defines="-DAMBER -DSEDDD"
 #this makes the script work on dvorak also
 if hash CXX 2>/dev/null; then
 	comp=CXX 
