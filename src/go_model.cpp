@@ -59,6 +59,8 @@ void finish_go_params(go_model_params * params)
     params->rsubcutoff=0; //eliminate subcutoff
 }
 
+
+
 //this can be called from the setup or from table::print_header_info
 void print_go_params(go_model_params params)
 {
@@ -114,6 +116,10 @@ go_model_info::~go_model_info()
     index=(inres*(jres-jfragtype->startres))+(ires-ifragtype->startres);
     return index;
 }*/
+
+
+
+
 //to prepare lists of atoms for making Go models
 
 

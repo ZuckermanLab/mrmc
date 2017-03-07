@@ -175,6 +175,7 @@ struct seddd_params {
     double c, eps0, eps1, delta_eps, frac_vol_tol;
     double hydration_volume[MAX_NUM_OF_ATOM_CLASSES];
     double hydration_shell_thickness[MAX_NUM_OF_ATOM_CLASSES];
+    bool read[MAX_NUM_OF_ATOM_CLASSES];
 };
 #endif
 

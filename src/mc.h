@@ -131,7 +131,9 @@ private:
     bool update_pair_list_if_needed(long int istep, double * coords);
     void read_restart(char * fname);
     void write_restart(long int istep, char * fname);
+    void read_go_model_info(FILE * input);
     //MC move support -- these are in mcmoves.cpp
+    void read_move_info(FILE * input);
     void mcmove(int * movetype, subset * movedatoms, double * coords);
     void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
     void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);

@@ -91,7 +91,7 @@ void simulation::process_commands(char * infname)
     char chain;
     FILE * input;
     FILE * output;
-    double p,size,frac, size2, ptot,mctemp, trans_size, rot_size, bond_rot_size, desired_ligand_com[3],temp;
+    double mctemp, trans_size, rot_size, bond_rot_size, desired_ligand_com[3],temp;
     int i,iatom,move,nsearch;
 
     double energies[EN_TERMS],etot;
@@ -204,72 +204,11 @@ void simulation::process_commands(char * infname)
             if (top->ligand_res>=0) top->aaregion_res+=top->ligand_res; //force inclusion of ligand in AA region for docking
             aaregion_specified = true;
             create_lists();
+        } else if (strcasecmp("GO_MODEL",token)==0) {
+            read_go_model_info(input);
         } else if (strcasecmp("MOVES",token)==0) {
-            for (i=1; i<=NUM_MOVES; i++) {
-                prob[i]=0.0;
-                movesize[i]=0.0;
-                large_dist_frac[i]=0.0;
-                movesize_large[i]=0.0;
-            }
-            for(;;) {
-                fgets(command,sizeof(command),input);
-                strncpy(command2,command,sizeof(command2));//This prevents parsing of the original command.
-                token=strtok(command2,delim);
-                if (token==NULL) continue; //blank line
-                if (strcasecmp("END",token)==0) break;
-                move=-1;
-                for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],token)==0) move=i;
-                if (move<0) break;
-                token+=strlen(token)+1;
-                if ((move==MOVE_LIGAND_TRANS) || (move==MOVE_LIGAND_ROT)) {
-                    sscanf(command,"%s %lg %lg %lg %lg\n",word,&p,&size,&frac,&size2);
-                    prob[move]=p;
-                    movesize[move]=size;
-                    large_dist_frac[move]=frac;
-                    movesize_large[move]=size2;
-                    if (movesize_large[move]<movesize[move]) {
-                        temp=movesize_large[move];
-                        movesize_large[move]=movesize[move];
-                        movesize[move]=temp;
-                        large_dist_frac[move]=1-large_dist_frac[move];
-                    }
-                } else {
-                    sscanf(command,"%s %lg %lg\n",word,&p,&size);
-                    prob[move]=p;
-                    movesize[move]=size;
-                }
-                //at this point movesize is in degrees if an angular type move.
-
-                //if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) movesize[move]*=DEG_TO_RAD;
-            }
-            ptot=0.0;
-            for(move=1;move<=NUM_MOVES;move++)ptot+=prob[move];
-            for(move=1;move<=NUM_MOVES;move++)prob[move]/=ptot;
-            cumprob[1]=prob[1];
-            for(move=2;move<=NUM_MOVES;move++)cumprob[move]=cumprob[move-1]+prob[move];
-            for(move=1;move<=NUM_MOVES;move++) {
-                if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
-                    //strncpy(unit,"degrees\0",sizeof(unit));
-                    movesize[move]*=DEG_TO_RAD;
-                    movesize_large[move]*=DEG_TO_RAD;
-                    if (move==MOVE_LIGAND_ROT) {
-                        printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f degrees -- Larger max size %.2f degrees  -- Large dist fraction %.2f%%\n",
-                            mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,movesize_large[move]*RAD_TO_DEG,large_dist_frac[move]*100.0);
-                    } else {
-                        printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees\n",
-                            mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG);
-                    }
-                } else {
-                    //strncpy(unit,"A\0",sizeof(unit);
-                    if (move==MOVE_LIGAND_TRANS) {
-                        printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f A -- Larger max size %.2f A -- Large dist fraction %.2f%%\n",
-                            mc_move_names[move],prob[move]*100.0,movesize[move],movesize_large[move],large_dist_frac[move]*100.0);
-                    } else {
-                        printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f A\n",
-                            mc_move_names[move],prob[move]*100.0,movesize[move]);
-                    }
-                }
-           }
+            //in mcmoves.cpp
+            read_move_info(input);
         } else if (strcasecmp("BOXSIZE",token)==0) {
             pbc=true;
             token=strtok(NULL,delim);
@@ -374,16 +313,60 @@ void simulation::process_commands(char * infname)
             mcloop();
         } else {
             //check for Go parameters -- see go_model.cpp
-            strncpy(word,token,sizeof(word)); //first word
+            /*strncpy(word,token,sizeof(word)); //first word
             token+=strlen(token)+1;
             if (read_go_parameter(word,token,&go_params)) {
-            } else {
+            } else {*/
                 printf("Unrecognized command.\n");
                 die();
-           }
+           //}
         } //end of large if..else
     } //while(true)
     fclose(input);
+}
+
+void simulation::read_go_model_info(FILE * input) // go_model_params * params)
+{
+    char command[255],command2[255],  model_fname[255];
+    char * token;
+    char * rest_of_line;
+    const char * delim = " \t\n";
+    double * model_coords;
+    subset valid_coords;
+    memset(model_fname,'\0',sizeof(model_fname));
+    for (;;) {
+        fgets(command,sizeof(command),input);
+        strncpy(command2,command,sizeof(command2));//This prevents parsing of the original command.
+        token=strtok(command2,delim);
+        if (token==NULL) continue; //blank line
+        if (strcasecmp("END",token)==0) break;
+        rest_of_line=token+strlen(token)+1; //point after the token
+        if (strcasecmp("HARDCORE",token)==0) {
+            sscanf(rest_of_line,"%lg",&go_params.hardcore);
+        } else if (strcasecmp("NATIVE_CUTOFF",token)==0) {
+            sscanf(rest_of_line,"%lg",&go_params.cutoff);
+        } else if (strcasecmp("EXPONENTS",token)==0) {
+            sscanf(rest_of_line,"%d %d",&go_params.m, &go_params.n);
+        } else if (strcasecmp("WELLDEPTH",token)==0) {
+            sscanf(rest_of_line,"%lg",&go_params.native_energy);
+            go_params.nonnative_energy=go_params.native_energy;
+        } else if (strcasecmp("NATIVE_STATE",token)==0) {
+	    token=strtok(NULL,delim);
+            strncpy(model_fname,token,sizeof(model_fname));
+        } else {
+            printf("Unrecognized Go model command.\n");
+            die();
+        }
+    }
+    finish_go_params(&go_params);
+    print_go_params(go_params);
+    go_model = new go_model_info();
+    model_coords=(double *) checkalloc(3*top->natom,sizeof(double));
+    printf("Creating native distances for Go model from PDB file %s.\n",model_fname);
+    top->read_pdb_file(model_fname,model_coords,valid_coords);
+    go_model->create_contact_map(top->nres,top->resinfo,top->natom,model_coords,&go_params,top->aaregion_res);
+    free(model_coords);
+
 }
 
 void simulation::create_lists(void)
@@ -420,7 +403,6 @@ void simulation::finish_initialization(void)
         for (i=0; i<nres; i++) top->aaregion_res+=i;
         create_lists();
     }
-
     top->aaregion_res.print("All atom region residues ");
     //this really should be done in topology's scope
     top->ligand.init(top->natom);
@@ -437,11 +419,12 @@ void simulation::finish_initialization(void)
         printf("Failed to find coordinates for atom %s %d %s\n",top->atoms[iatom].resName,top->atoms[iatom].resNum+1,top->atoms[iatom].name);
         die();
     }
+    top->check_solvation_params(&solvation_params);
     //ffield->build_coords(initcoords,top->natom,top->atoms,valid_coords);
     //we need to have set up go parameters by now
-    finish_go_params(&go_params);
+    /*finish_go_params(&go_params);
     go_model = new go_model_info();
-    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,top->aaregion_res);
+    go_model->create_contact_map(top->nres,top->resinfo,top->natom,initcoords,&go_params,top->aaregion_res);*/
 
     //Create nonbond list object.  Set listcutoff=cutoff or less to disable the nb list.
     /*use_nb_list=(listcutoff>cutoff);
@@ -467,7 +450,7 @@ void simulation::finish_initialization(void)
         printf("Spherical cutoff              %.2f\n",cutoff);
     }*/
     printf("Dielectric constant:          %.2f\n",eps);
-    print_go_params(go_params);
+    //print_go_params(go_params);
     if (seed==0) {
        	   	//seed=time(NULL);
         seed=read_random_seed();

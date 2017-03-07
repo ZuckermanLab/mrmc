@@ -130,12 +130,12 @@ void topology::generate_backbone_moves(vector<mc_move> * backbone_moves)
 	//ACE has no phi move possible, and NME has no psi move possible.
         if (!is_ace) backbone_moves->push_back(phi_move);
         if (!is_nme) backbone_moves->push_back(psi_move);
-#ifdef DEBUG
+/*#ifdef DEBUG
         printf("Backbone phi move for residue %d %s:\n",ires+1,resdef[resinfo[ires].restype].name);
         print_atom_subset(phi_move.movedatoms);
         printf("Backbone psi move for residue %d %s:\n",ires+1,resdef[resinfo[ires].restype].name);
         print_atom_subset(psi_move.movedatoms);
-#endif
+#endif*/
     }
 }
 
@@ -160,10 +160,10 @@ void topology::generate_backrub_moves(vector<mc_move> * backrub_moves)
                         }
                 }
                 backrub_moves->push_back(move);
-#ifdef DEBUG
+/*#ifdef DEBUG
                     printf("Adding backrub move %d %d:\n",ires,jres);
                     print_atom_subset(move.movedatoms);
-#endif
+#endif*/
             }
 }
 
@@ -206,10 +206,10 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vecto
         } else {
             sidechain_moves->push_back(newmove);
         }
-#ifdef DEBUG
+/*#ifdef DEBUG
         printf("Adding sidechain move:\n");
         print_atom_subset(newmove.movedatoms);
-#endif
+#endif*/
     }
 }
 
@@ -348,5 +348,81 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
         //top->print_atom_subset(*movedatoms);
         angle=(2.0*genrand_real3()-1.0)*movesize[move];
         rotate_atoms_by_axis(&movelist[moveindex],angle,coords);
+    }
+}
+
+
+void simulation::read_move_info(FILE * input)
+{
+    int i,move;
+    char command[255],command2[255],word[255];
+    char * token;
+    const char * delim = " \t\n";
+    double p,size,frac, size2, ptot,temp;
+    for (i=1; i<=NUM_MOVES; i++) {
+        prob[i]=0.0;
+        movesize[i]=0.0;
+        large_dist_frac[i]=0.0;
+        movesize_large[i]=0.0;
+    }
+    for(;;) {
+        fgets(command,sizeof(command),input);
+        strncpy(command2,command,sizeof(command2));//This prevents parsing of the original command.
+        token=strtok(command2,delim);
+        if (token==NULL) continue; //blank line
+        if (strcasecmp("END",token)==0) break;
+        move=-1;
+        for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],token)==0) move=i;
+        if (move<0) break;
+        token+=strlen(token)+1;
+        if ((move==MOVE_LIGAND_TRANS) || (move==MOVE_LIGAND_ROT)) {
+            sscanf(command,"%s %lg %lg %lg %lg\n",word,&p,&size,&frac,&size2);
+            prob[move]=p;
+                movesize[move]=size;
+                large_dist_frac[move]=frac;
+                movesize_large[move]=size2;
+                if (movesize_large[move]<movesize[move]) {
+                    temp=movesize_large[move];
+                    movesize_large[move]=movesize[move];
+                    movesize[move]=temp;
+                    large_dist_frac[move]=1-large_dist_frac[move];
+                }
+            } else {
+                sscanf(command,"%s %lg %lg\n",word,&p,&size);
+                prob[move]=p;
+                movesize[move]=size;
+            }
+            //at this point movesize is in degrees if an angular type move.
+
+                //if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) movesize[move]*=DEG_TO_RAD;
+    }
+    //We automatically scale the probabilities so they add to 1.
+    ptot=0.0;
+    for(move=1;move<=NUM_MOVES;move++)ptot+=prob[move];
+    for(move=1;move<=NUM_MOVES;move++)prob[move]/=ptot;
+    cumprob[1]=prob[1];
+    for(move=2;move<=NUM_MOVES;move++)cumprob[move]=cumprob[move-1]+prob[move];
+    for(move=1;move<=NUM_MOVES;move++) {
+        if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
+            //strncpy(unit,"degrees\0",sizeof(unit));
+            movesize[move]*=DEG_TO_RAD;
+            movesize_large[move]*=DEG_TO_RAD;
+            if (move==MOVE_LIGAND_ROT) {
+                printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f degrees -- Larger max size %.2f degrees  -- Large dist fraction %.2f%%\n",
+                    mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,movesize_large[move]*RAD_TO_DEG,large_dist_frac[move]*100.0);
+            } else {
+                printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees\n",
+                    mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG);
+            }
+        } else {
+            //strncpy(unit,"A\0",sizeof(unit);
+            if (move==MOVE_LIGAND_TRANS) {
+                printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f A -- Larger max size %.2f A -- Large dist fraction %.2f%%\n",
+                    mc_move_names[move],prob[move]*100.0,movesize[move],movesize_large[move],large_dist_frac[move]*100.0);
+            } else {
+                printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f A\n",
+                        mc_move_names[move],prob[move]*100.0,movesize[move]);
+            }
+        }
     }
 }

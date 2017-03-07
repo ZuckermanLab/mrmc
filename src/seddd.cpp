@@ -16,6 +16,9 @@ void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2
     double mass;
     double r,r2, voli, volj, ri, rj, lambdai, lambdaj,aux,dvi, dvj;
     int i,iatom, jatom, iclass, jclass, igroup, jgroup,k;
+#ifdef TIMERS
+    switch_timer(TIMER_CALC_VOLUMES);
+#endif
     //compute the COM of each group -- not sure if this is how it should be done
     /*group_com=(double *) checkalloc(3*ngroup,sizeof(double));
     group_mass=(double *) checkalloc(ngroup,sizeof(double));
@@ -71,6 +74,21 @@ void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2
         jatom=atoms[iatom].bondedAtomList[0];
         frac_volumes[iatom]=frac_volumes[jatom];
     }
+#ifdef TIMERS
+    switch_timer(TIMER_OTHER);
+#endif
+}
+
+void topology::check_solvation_params(seddd_params * params)
+{
+    int iatom, iclass;
+    for (iatom=0; iatom<natom; iatom++) if (atoms[iatom].atomicNum>1) {
+        iclass=atoms[iatom].classx;
+        if (!params->read[iclass]) {
+           printf("Error: solvation parameters for atom %s %d %s class %d have not been read.\n",atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name,iclass);
+           die();
+        }
+    }
 }
 
 void read_solvation_params(char * line, seddd_params * params)
@@ -80,8 +98,14 @@ void read_solvation_params(char * line, seddd_params * params)
     FILE * input;
     int iclass;
     double vol, thickness;
+    for (iclass=0; iclass<MAX_NUM_OF_ATOM_CLASSES; iclass++) params->read[iclass]=false;
     sscanf(line,"%lg %lg %lg %lg %s",&params->eps0,&params->eps1,&params->c, &params->frac_vol_tol, fname);
     params->delta_eps=params->eps1-params->eps0;
+    printf("Garden and Zhorov SEDDD method enabled.  Dielectric constant given by epsilon = r * (eps_0 + (1 - s_kl) * (eps_1 - eps_0))\n");
+    printf("where s_kl = c * (v_k + v_l)\n");
+    printf("eps_0, eps_1                        = %.1f %.1f\n",params->eps0,params->eps1);
+    printf("c                                   = %.3f\n",params->c);
+    printf("tolerance for changed frac. volumes = %g\n",params->frac_vol_tol); 
     input=fopen(fname,"r");
     if (input==NULL) {
         printf("Could not open file %s\n",fname);
@@ -99,6 +123,7 @@ void read_solvation_params(char * line, seddd_params * params)
 	if (*p=='\0') continue;
         //format: atom class number, hydration volume, hydration shell thickness
         sscanf(p,"%d %s %lg %lg\n",&iclass,clname,&vol,&thickness);
+        params->read[iclass]=true;
         params->hydration_volume[iclass]=vol;
         params->hydration_shell_thickness[iclass]=thickness;
     }

@@ -184,9 +184,10 @@ public:
 //#define TIMER_COV_TABLES     6
 #define TIMER_GO             7
 #define TIMER_INT_OTHER      8
-#define TIMER_NB_LIST        9
-#define TIMER_OTHER          10
-#define NTIMERS              11
+#define TIMER_CALC_VOLUMES   9
+#define TIMER_NB_LIST        10
+#define TIMER_OTHER          11
+#define NTIMERS              12
 
 struct timer {
     unsigned long long int stop_count;
@@ -196,7 +197,7 @@ struct timer {
 
 static struct timer timers[NTIMERS];
 static volatile int current_timer;
-static const char * timer_names[NTIMERS] = {"MC moves","Bonds","Angles","Dihedrals","Impropers","Pre-cutoff","Non tab. VDW/Elec","Go potential","Other interaction","Nonbond list update","Other"};
+static const char * timer_names[NTIMERS] = {"MC moves","Bonds","Angles","Dihedrals","Impropers","Pre-cutoff","Non tab. VDW/Elec","Go potential","Other interaction","Calc. volumes","Nonbond list update","Other"};
 
 /*"Backbone tables","Check cutoff",
     "Exact prep","Exact interaction","Table prep","Table orientational","Table translational","Table index calc","Table lookup","Other interaction",*/
