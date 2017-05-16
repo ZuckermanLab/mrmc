@@ -48,6 +48,7 @@ simulation::simulation(void)
     pbc=false;
     aaregion_specified=false;
     initialized=false;
+    go_only=false;
     seed = 0;
 }
 
@@ -204,6 +205,11 @@ void simulation::process_commands(char * infname)
             if (top->ligand_res>=0) top->aaregion_res+=top->ligand_res; //force inclusion of ligand in AA region for docking
             aaregion_specified = true;
             create_lists();
+            go_only=true;
+            for (i=0; i<top->nres; i++) if (top->aaregion_res[i]) {
+                go_only=false;
+                break;
+            }
         } else if (strcasecmp("GO_MODEL",token)==0) {
             read_go_model_info(input);
         } else if (strcasecmp("MOVES",token)==0) {
@@ -716,10 +722,10 @@ void simulation::ligand_energies(double * coords, double * total_internal_energy
 #ifdef SEDDD
     frac_volumes = (double *) checkalloc(top->natom,sizeof(double));
     top->calculate_solvation_volumes(&solvation_params,cutoff2,&solv_list,coords,frac_volumes,ffield);
-    ffield->subset_energy(&solvation_params,cutoff2,top->natom,top->atoms,top->ligand,old_pair_list.size(),&pair_list[0],coords,frac_volumes,internal_energies,intxn_energies);
+    ffield->subset_energy(&solvation_params,cutoff2,top->natom,top->atoms,top->ligand,pair_list.size(),&pair_list[0],coords,frac_volumes,internal_energies,intxn_energies);
     free(frac_volumes);
 #else
-    ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,old_pair_list.size(),&pair_list[0],coords,internal_energies,intxn_energies);
+    ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,pair_list.size(),&pair_list[0],coords,internal_energies,intxn_energies);
 #endif
     *total_internal_energy=0.0;
     *total_intxn_energy=0.0;

@@ -47,7 +47,7 @@ private:
     seddd_params solvation_params;
 #endif
     char forcefieldfname[255],deffname[255];
-    bool aaregion_specified, initialized;
+    bool aaregion_specified, initialized, go_only;
     forcefield * ffield;
     go_model_info * go_model;
     go_model_params go_params;

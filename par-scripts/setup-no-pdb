@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#No reference PDB: use atom names directly from the SDF file
+drug=$1
+mkdir $drug
+#This converts the SDF file to a PDB structure, then adds hydrogens consistent with a pH of 7.
+obabel -isdf sdf/$drug.sdf -opdb -O $drug/$drug-from-sdf.pdb -h -p 7 -l1
+drugu=`echo $drug | awk '{print toupper($0)}'`
+./unique-labels.py $drug/$drug-from-sdf.pdb $drugu $drug/$drug.pdb $drug/matches-$drug
+
