@@ -215,8 +215,10 @@ forcefield::forcefield(char * fname)
 }
 
 
-inline double MLJ(double coefA,double coefB, double r6)
+inline double MLJ(double coefA,double coefB, double r2)
 {
+    double r6 = r2*r2*r2;
+    if (coefB==0) return 0;
     if (r6==0) return DUMMY_ENERGY;
     double ir6 = 1./r6;
     double ir12 = ir6*ir6;
@@ -362,10 +364,13 @@ double dihedral(double a[],double b[],double c[]){
 void forcefield::nonbond_energy( int rdie, int type1,  int type2, int is14, double r2, double * evdw, double * eelec)
 {
     int class1,class2;
-    double q1,q2,r6;
-
+    double q1,q2;
+    if (r2<MIN_DIST2) {
+        *evdw=DUMMY_ENERGY;
+        *eelec=0;
+        return;
+    } 
     //r2=dx*dx+dy*dy+dz*dz;
-    r6=r2*r2*r2;
     class1=atomTypeLookUp[type1].classx;
     class2=atomTypeLookUp[type2].classx;
     q1=chargeParams[type1];
@@ -376,10 +381,10 @@ void forcefield::nonbond_energy( int rdie, int type1,  int type2, int is14, doub
         *eelec=MCE(q1,q2,sqrt(r2));
     }
     if (is14) {
-        *evdw=MLJ(vdwAFact14[class1][class2],vdwBFact14[class1][class2],r6);
+        *evdw=MLJ(vdwAFact14[class1][class2],vdwBFact14[class1][class2],r2);
         *eelec*=ELEC14_SCALE;
     } else {
-        *evdw=MLJ(vdwAFact[class1][class2],vdwBFact[class1][class2],r6);
+        *evdw=MLJ(vdwAFact[class1][class2],vdwBFact[class1][class2],r2);
     }
 }
 
@@ -477,10 +482,6 @@ double forcefield::improper_energy(int type, int a, int b, int c, int d, double 
 	//dihed is the cosine of the dihedral.  AMBER uses the formula E = (1/2)(1+cos(2*phi-180)).
     //assumes chi0 = 180 degrees.
     en = K * 2.0 * (1 - dihed*dihed);
-#endif
-#ifdef DEBUG_NON_TABULATED
-    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %.4f %.2f %.2f %.4f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
-		atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
 #endif
     return en;
 }
@@ -674,10 +675,16 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       b = atoms[iatom].impropAtomList[4*j+1];
       c = atoms[iatom].impropAtomList[4*j+2];
       d = atoms[iatom].impropAtomList[4*j+3];
-
-      if(term_needed(movedatoms,a,b,c,d) && (iatom==c)){//avoid multi-counting improper dihedral energies
+//see the corresponding section in non_tabulated_energy
+      if(term_needed(movedatoms,a,b,c,d) && (iatom==c) && ((a<c) || (b<c))){
         type = atoms[iatom].impropParamType[j];
-        energies[EN_IMPROPER] += improper_energy(type,a,b,c,d,coords);
+        en =improper_energy(type,a,b,c,d,coords);
+#ifdef DEBUG 
+    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
+                atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,en); //sx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
+#endif
+
+        energies[EN_IMPROPER] += en; 
         count++;
       }
     }
@@ -771,10 +778,10 @@ void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int
   int count;
   int a, b, c, d;
   double nbflag;
-
+   
   double dx,dy,dz;
   double r2,r6;
-  double evdw, eelec;
+  double en,evdw, eelec;
   bool is14;
 #ifdef SEDDD
   double s_kl, eps;
@@ -830,12 +837,19 @@ void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int
       b = atoms[iatom].impropAtomList[4*j+1];
       c = atoms[iatom].impropAtomList[4*j+2];
       d = atoms[iatom].impropAtomList[4*j+3];
-
-      if((iatom==c)){//avoid multi-counting improper dihedral energies
+//improper dihedral deviations from Tinker for ALA-XXX-ALA: ARG 0.01349, HIP 0.314106, TRP -8.2e-5
+//      if((iatom==c)){
+//This appears to reduce deviations for improper dihedrals in HIP in the comparison to Tinker.  But it creates (smaller) deviations for more amino acids.
+//deviations: ARG 0.006578, HIE -0.045742, HIP -0.006386, PHE -0.003204, TRP -0.000811, TYR -0.079664
+      if((iatom==c) && ((a<c) || (b<c))){
           //The CHARMM 19 force field needs to be defined like this, replacing the "BC" axis with the "AD" axis.
         type = atoms[iatom].impropParamType[j];
-
-        energies[EN_IMPROPER] += improper_energy(type,a,b,c,d,coords);
+        en = improper_energy(type,a,b,c,d,coords);
+        energies[EN_IMPROPER] += en;
+#ifdef DEBUG       
+    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
+                atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,en); //sx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
+#endif
 
         count++;
       }
@@ -985,8 +999,8 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
       b = atoms[iatom].impropAtomList[4*j+1];
       c = atoms[iatom].impropAtomList[4*j+2];
       d = atoms[iatom].impropAtomList[4*j+3];
-
-      if (iatom==c){//avoid multi-counting improper dihedral energies
+      //see the corresponding seciton in non_tabulated_energy
+      if((iatom==c) && ((a<c) || (b<c))){
         type = atoms[iatom].impropParamType[j];
         if (atomset[a] && atomset[b] && atomset[c] && atomset[d]) {
             internal_energies[EN_IMPROPER] += improper_energy(type,a,b,c,d,coords);

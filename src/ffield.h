@@ -45,6 +45,10 @@
 
 #define INVALID_ENERGY -1.0E20
 #define DUMMY_ENERGY 1.0E20
+#define MIN_DIST      0.1 //Atoms are not allowed to approach closer than this distance (A) without producing a huge energy
+#define MIN_DIST2     MIN_DIST*MIN_DIST
+
+
 
 #define INTERP_NONE    0
 #define INTERP_1D      1
