@@ -200,9 +200,9 @@ double go_model_info::moved_energy(int pbc, double halfboxsize, double boxsize, 
                 } else {
                     en=params->scaled_nonnative_en*am;
                 }
-#ifdef DEBUG
-                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
-#endif
+//#ifdef DEBUG
+//                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
+//#endif
                 entot+=en;
         }
     return entot;
@@ -247,9 +247,9 @@ double go_model_info::energy(int pbc, double halfboxsize, double boxsize, go_mod
                 } else {
                     en=params->scaled_nonnative_en*am;
                 }
-#ifdef DEBUG
-                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
-#endif
+//#ifdef DEBUG
+//                if (en!=0) printf("Go model: %d %d %d %d %.16f %.16f %.16f %.16f\n",ires,jres,iatom,jatom,sqrt(r2),sqrt(native_distance2),a,en);
+//#endif
                 entot+=en;
         }
     return entot;

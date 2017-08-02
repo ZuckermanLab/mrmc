@@ -50,6 +50,11 @@ simulation::simulation(void)
     initialized=false;
     go_only=false;
     seed = 0;
+    do_ncmc = false;
+    n_lambda_schedule = 0;
+    lambda_schedule = NULL;
+    current_lambda_vdw=1.0;
+    current_lambda_elec=1.0;
 }
 
 
@@ -237,6 +242,20 @@ void simulation::process_commands(char * infname)
             strncpy(word,token,sizeof(word));
             sscanf(word,"%lg",&eps);
 #endif
+        //This is temporary until the Mobley hamiltonian tempering method is fully implemented.
+        } else if (strcasecmp("LAMBDA",token)==0) {
+            token+=strlen(token)+1;
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%lg %lg",&current_lambda_vdw,&current_lambda_elec);
+        } else if (strcasecmp("NCMC",token)==0) {
+            do_ncmc=true;
+            printf("Nonequilibriumm Candidate Monte Carlo enabled.\n");
+            token=strtok(NULL,delim);
+            strncpy(word,token,sizeof(word));
+            sscanf(word,"%ld",&nsteps_temper_move);
+            token=strtok(NULL,delim);
+            strncpy(fname,token,sizeof(fname));
+            read_lambda_schedule(fname);
         } else if (strcasecmp("SEED",token)==0) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));

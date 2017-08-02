@@ -34,6 +34,11 @@ using std::vector;
 
 static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-bond","Ligand-trans","Ligand-rot","Heavy-atom-trans","Heavy-atom-rot"};
 
+//for NCMC
+struct lambda_sched_info {
+    long int step; //modulo nstep_temper_move
+    double lambda_vdw, lambda_elec;
+};
 
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
 class simulation {
@@ -94,10 +99,20 @@ private:
     unsigned long int seed;
     long int * acc_by_atom;
     long int * att_by_atom;
-
-
     //double * en_by_table;
     int nres; //nres is for temporary use until the topology object can be fully initialized
+    //stuff for Mobley hamiltonian tempering
+    bool do_ncmc;
+    int  nsteps_temper_move, n_lambda_schedule;
+    lambda_sched_info * lambda_schedule;
+    double current_lambda_vdw, current_lambda_elec;
+    double current_noneq_work;
+    double * oldcoords_ncmc;
+    int natt_ncmc, nacc_ncmc;
+    double sumprob_ncmc;
+    //double * old_frac_volumes_ncmc;
+    //std::vector<atom_nb_entry> old_pair_list_ncmc, old_solv_list_ncmc;
+
 #if defined(PARALLEL) || defined(EXCHANGE)
     int mynod, numnod;
     void parallel_start(void);
@@ -153,6 +168,10 @@ private:
     //void print_energies_by_table(void);
     //void load_tables(char * fmt);
     void energy_analysis(char * type, char * fname,  char * enfname);
+    //for ncmc
+    void read_lambda_schedule(char * fname);
+    void adjust_lambdas_and_accumulate_work(long int istep, bool * lambda_changed);
+    void perform_ncmc_move(void);
 public:
     void comparison_test(void);
 #if defined(PARALLEL) || defined(EXCHANGE)

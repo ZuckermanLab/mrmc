@@ -205,9 +205,9 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
     do_bonds=((movetype==MOVE_HEAVY_TRANS) || (movetype==MOVE_HEAVY_ROT));
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
 #ifdef SEDDD
-    ffield->moved_non_tabulated_energy(&solvation_params,cutoff2,top->natom,top->atoms,movedatoms,changedvol,do_bonds,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
+    ffield->moved_non_tabulated_energy(&solvation_params,current_lambda_vdw,current_lambda_elec,top->ligand,cutoff2,top->natom,top->atoms,movedatoms,changedvol,do_bonds,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
 #else
-    ffield->moved_non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
+    ffield->moved_non_tabulated_energy(eps,rdie,current_lambda,top->ligand,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
 #endif
 #ifdef TIMERS
     switch_timer(TIMER_GO);
@@ -252,9 +252,9 @@ void simulation::total_energy( double * coords, std::vector<atom_nb_entry> * pai
     for (i=0; i<EN_TERMS; i++) energies[i]=0.0;
     //if (en_by_table!=NULL) for (itype=0; itype<top->nfragtypes*top->nfragtypes; itype++) en_by_table[itype]=0.0;
 #ifdef SEDDD
-    ffield->non_tabulated_energy(&solvation_params,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
+    ffield->non_tabulated_energy(&solvation_params,current_lambda_vdw,current_lambda_elec,top->ligand,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
 #else
-    ffield->non_tabulated_energy(eps,rdie,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,energies);
+    ffield->non_tabulated_energy(eps,rdie,current_lambda,top->ligand,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,energies);
 #endif
 #ifdef TIMERS
     switch_timer(TIMER_GO);
@@ -385,6 +385,7 @@ void simulation::mcloop(void)
     double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev,sumprob[NUM_MOVES+1],avgprob;
     double cputime,elapsedtime;
     double oldenergies[EN_TERMS],newenergies[EN_TERMS],cum_energies[EN_TERMS],fresh_energies[EN_TERMS];
+    bool lambda_changed, lambda_has_been_changed;
     //bool * moved;
     subset movedatoms;
     subset changedvol; //which atoms have changed fractional volume
@@ -407,6 +408,10 @@ void simulation::mcloop(void)
     newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
     for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
     for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
+    if (do_ncmc) {
+        oldcoords_ncmc = (double *) checkalloc(3*top->natom,sizeof(double));
+        for (i=0; i<3*top->natom; i++) oldcoords_ncmc[i]=oldcoords[i];
+    }
     if (strcasecmp(trajfmt,"DCD")==0) {
         xyzoutput=fopen(xyzfname,"wb");
     } else if (strcasecmp(trajfmt,"PDB")==0) {
@@ -457,6 +462,11 @@ void simulation::mcloop(void)
         natt[i]=0;
         sumprob[i]=0.0;
     }
+    if (do_ncmc) {
+        nacc_ncmc=0;
+        natt_ncmc=0;
+        sumprob_ncmc=0.0;
+    }
     acc_by_atom = (long int *) checkalloc(top->natom,sizeof(long int));
     att_by_atom = (long int *) checkalloc(top->natom,sizeof(long int));
     for (i=0; i<top->natom; i++) {
@@ -493,7 +503,8 @@ void simulation::mcloop(void)
     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
     cum_energy=fresh_energy;
     //die();
-
+    current_noneq_work=0.0;
+    lambda_has_been_changed=false;
     for (istep=1; istep<=nmcstep; istep++) {
 #ifdef TIMERS
          switch_timer(TIMER_MC_MOVE);
@@ -509,11 +520,11 @@ void simulation::mcloop(void)
 #ifdef SEDDD
          //hack to ensure that solvation volumes are not calculaed unless there is at least one residue in atomistic region (ie not go-only)
          if (!go_only) {
-  	     top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
-  	     //Identify which atoms have had their exposure change, and use this info in the rules for which pairs of atoms to recalculate.
-  	     changedvol.init(top->natom);
-  	     for (i=0; i<top->natom; i++) if (fabs(new_frac_volumes[i]-old_frac_volumes[i])>solvation_params.frac_vol_tol) changedvol+=i;
-	 }
+            top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
+            //Identify which atoms have had their exposure change, and use this info in the rules for which pairs of atoms to recalculate.
+            changedvol.init(top->natom);
+            for (i=0; i<top->natom; i++) if (fabs(new_frac_volumes[i]-old_frac_volumes[i])>solvation_params.frac_vol_tol) changedvol+=i;
+         }
          moved_energy(movetype,movedatoms,changedvol,oldcoords,&old_pair_list,old_frac_volumes,oldenergies,&eold);
          moved_energy(movetype,movedatoms,changedvol,newcoords,&new_pair_list,new_frac_volumes,newenergies,&enew);
 #else
@@ -551,6 +562,17 @@ void simulation::mcloop(void)
              new_solv_list=old_solv_list;
              for (i=0; i<top->natom; i++) new_frac_volumes[i]=old_frac_volumes[i];
          }
+         if (do_ncmc) {
+             adjust_lambdas_and_accumulate_work(istep,&lambda_changed);
+             //We need to keep track of if there have been any lambda changes in the interval between two energy printouts to avoid the cum/fresh energy check.
+             lambda_has_been_changed = lambda_has_been_changed || lambda_changed;
+             //this will eventually be replaced by a subroutine for accepting/rejecting the NCMC move
+             if ((istep%nsteps_temper_move)==0) {
+                 printf("Step %ld: Nonequilibrium work: %.6f kcal/mol\n",istep,current_noneq_work);
+                 perform_ncmc_move();
+                 current_noneq_work=0.0;
+             }
+         }
          if (mc_log!=NULL) {
              //Log file: step number, move type, deltaU, probability, accepted?, "*"...
              fprintf(mc_log,"%ld %s %g %g %c : ",istep+1,mc_move_names[movetype],de,p,yesno(accepted));
@@ -584,23 +606,29 @@ void simulation::mcloop(void)
              total_energy(newcoords,&new_pair_list,fresh_energies,&fresh_energy);
 #endif
              print_energies(stdout,FALSE,"Energy:",istep,fresh_energies,fresh_energy);
-             deviation=cum_energy-fresh_energy;
-             printf("Energy deviation: %.6f kcal/mol\n",deviation);
-             //The maximum allowed deviation is 1x10^-6 of the energy or 0.001 kcal/mol, whichever is larger.
-             //This allwos a little slack in case of large energies during docking.
-             maxdev=1e-6*fresh_energy; //this is intentionally without the "fabs", negative energies do not get slack
-             if (maxdev<0.001) maxdev=0.001;
-             if (fabs(deviation)>maxdev) {
-                 print_energies(stdout,FALSE,"Cum. energy:",istep,cum_energies,cum_energy);
-                 printf("Too much deviation between cumulative and fresh energies.\n");
-                 //if (strlen(restartfname)>0) write_restart(nprevstep+istep,restartfname);
-                 die();
-             }
-             if (fabs(deviation)>0.001) {
-                 //reset the cumulative energies to ensure that we don't trip the deviation alarm when the energy drops
+             if (do_ncmc && lambda_has_been_changed) {
+                 //just reset the cumulative energies and skip the check
                  for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
                  cum_energy=fresh_energy;
-             }
+             } else {
+                 deviation=cum_energy-fresh_energy;
+                 printf("Energy deviation: %.6f kcal/mol\n",deviation);
+                 //The maximum allowed deviation is 1x10^-6 of the energy or 0.001 kcal/mol, whichever is larger.
+                 //This allwos a little slack in case of large energies during docking.
+                 maxdev=1e-6*fresh_energy; //this is intentionally without the "fabs", negative energies do not get slack
+                 if (maxdev<0.001) maxdev=0.001;
+                 if (fabs(deviation)>maxdev) {
+                     print_energies(stdout,FALSE,"Cum. energy:",istep,cum_energies,cum_energy);
+                     printf("Too much deviation between cumulative and fresh energies.\n");
+                     //if (strlen(restartfname)>0) write_restart(nprevstep+istep,restartfname);
+                     die();
+                 }
+                 if (fabs(deviation)>0.001) {
+                     //reset the cumulative energies to ensure that we don't trip the deviation alarm when the energy drops
+                     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
+                     cum_energy=fresh_energy;
+                 }
+             } // if (do_ncmc && lambda_has_been_changed)
              //printf("Step %ld: Cumulative energy = %.4f   Fresh energy = %.4f Deviation %.4f\n",istep,cum_energy,fresh_energy,cum_energy-fresh_energy);
              for (i=1; i<=NUM_MOVES; i++) {
                 if (natt[i]>0) accrate=((double) nacc[i]/(double) natt[i])*100.0; else accrate=0.0;

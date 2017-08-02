@@ -369,7 +369,7 @@ void forcefield::nonbond_energy( int rdie, int type1,  int type2, int is14, doub
         *evdw=DUMMY_ENERGY;
         *eelec=0;
         return;
-    } 
+    }
     //r2=dx*dx+dy*dy+dz*dz;
     class1=atomTypeLookUp[type1].classx;
     class2=atomTypeLookUp[type2].classx;
@@ -592,9 +592,9 @@ inline bool term_needed(subset& movedatoms, const int a, const int b, const int 
 //Also includes all non-tabulated interaction terms.
 //To do: incorporate cutoff into nonbond calculation.
 #ifdef SEDDD
-void forcefield::moved_non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, subset& changedvol, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * energies)
+void forcefield::moved_non_tabulated_energy(seddd_params * params, double lambda_vdw, double lambda_elec, subset& ligand, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, subset& changedvol, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * frac_volumes, double * energies)
 #else
-void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
+void forcefield::moved_non_tabulated_energy(double eps, int rdie, double lambda_vdw, double lambda_elec, subset& ligand, double cutoff2, int numOfAtoms, ATOMS * atoms, subset& movedatoms, bool do_bonds, int nb_atom_list_size, atom_nb_entry * nb_atom_list,  double * coords, double * energies)
 #endif
 {
   int i,j,k;
@@ -679,12 +679,12 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       if(term_needed(movedatoms,a,b,c,d) && (iatom==c) && ((a<c) || (b<c))){
         type = atoms[iatom].impropParamType[j];
         en =improper_energy(type,a,b,c,d,coords);
-#ifdef DEBUG 
-    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
-                atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,en); //sx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
+#ifdef DEBUG
+//    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
+//                atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,en); //sx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
 #endif
 
-        energies[EN_IMPROPER] += en; 
+        energies[EN_IMPROPER] += en;
         count++;
       }
     }
@@ -733,6 +733,13 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
       dz=coords[3*jatom+2]-coords[3*iatom+2];
       r2=dx*dx+dy*dy+dz*dz;
       if (r2>cutoff2) continue;
+//#ifdef WARN
+//      if (r2<1.0) {
+         //atoms within 1 A
+//         printf("warning: close atoms %s %d %s and %s %d %s distance %.2f A\n",
+//            atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resName,atoms[jatom].resNum+1,atoms[jatom].name,sqrt(r2));
+//      }
+//#endif
 #ifdef TIMERS
       switch_timer(TIMER_NT_VDW_ELEC);
 #endif
@@ -744,11 +751,16 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
 #else
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
 #endif
+//use lambda to scale protein-ligand interactions
+      if (ligand[iatom]^ligand[jatom]) {
+          evdw*=lambda_vdw;
+          eelec*=lambda_elec;
+      }
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
-#ifdef DEBUG
-      printf("Nonbonded interaction (moved): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
-#endif
+//#ifdef DEBUG
+//      printf("Nonbonded interaction (moved): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
+//#endif
 #ifdef TIMERS
       switch_timer(TIMER_NT_PRECUTOFF);
 #endif
@@ -765,9 +777,9 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double cutoff2
 
 
 #ifdef SEDDD
-void forcefield::non_tabulated_energy(seddd_params * params, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * frac_volumes, double * energies)
+void forcefield::non_tabulated_energy(seddd_params * params, double lambda_vdw, double lambda_elec, subset& ligand, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * frac_volumes, double * energies)
 #else
-void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies)
+void forcefield::non_tabulated_energy(double eps, int rdie, double lambda_vdw, double lambda_elec, subset& ligand, double cutoff2, int numOfAtoms, ATOMS * atoms, int nb_atom_list_size, atom_nb_entry * nb_atom_list, double * coords, double * energies)
 #endif
 {
   int i,j,k;
@@ -778,7 +790,7 @@ void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int
   int count;
   int a, b, c, d;
   double nbflag;
-   
+
   double dx,dy,dz;
   double r2,r6;
   double en,evdw, eelec;
@@ -846,9 +858,9 @@ void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int
         type = atoms[iatom].impropParamType[j];
         en = improper_energy(type,a,b,c,d,coords);
         energies[EN_IMPROPER] += en;
-#ifdef DEBUG       
-    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
-                atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,en); //sx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
+#ifdef DEBUG
+//    printf("Improper: %d %d %d %d %s %s %s %s %d %d %d %d %f\n",a+1,b+1,c+1,d+1,atoms[a].name,atoms[b].name,atoms[c].name,atoms[d].name,
+//                atoms[a].classx,atoms[b].classx,atoms[c].classx,atoms[d].classx,en); //sx,K,chi0*RAD_TO_DEG,acos(dihed)*RAD_TO_DEG,en);
 #endif
 
         count++;
@@ -891,6 +903,13 @@ void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int
       dz=coords[3*jatom+2]-coords[3*iatom+2];
       r2=dx*dx+dy*dy+dz*dz;
       if (r2>cutoff2) continue;
+#ifdef WARN
+      if (r2<1.0) {
+         //atoms within 1 A
+         printf("warning: close atoms %s %d %s and %s %d %s distance %.2f A\n",
+            atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resName,atoms[jatom].resNum+1,atoms[jatom].name,sqrt(r2));    
+      }
+#endif
 #ifdef SEDDD
       nonbond_energy(true,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec); //does not take into account epsilon, just computes qi*qj/r2
       s_kl=params->c*(frac_volumes[iatom]+frac_volumes[jatom]); //eq. 2 from Garden and Zhorov paper
@@ -899,11 +918,15 @@ void forcefield::non_tabulated_energy(double eps, int rdie,  double cutoff2, int
 #else
       nonbond_energy(rdie,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec);
 #endif
+      if (ligand[iatom]^ligand[jatom]) {
+          evdw*=lambda_vdw;
+          eelec*=lambda_elec;
+      }
       energies[EN_VDW_EXACT]+=evdw;
       energies[EN_ELEC_EXACT]+=eelec;
-#ifdef DEBUG
-      printf("Nonbonded interaction (total): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
-#endif
+//#ifdef DEBUG
+//      printf("Nonbonded interaction (total): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
+//#endif
   }
 #ifdef SEDDD
   energies[EN_ELEC_EXACT]=energies[EN_ELEC_EXACT]*COUL_CONST;
@@ -940,8 +963,11 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
 
   //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
 
-
-
+  for (i=1; i<EN_TERMS; i++) {
+      internal_energies[i]=0.0;
+      intxn_energies[i]=0.0;
+  }
+   
   //printf("bond stretching: %f kcal/mol, the number of interactions: %d\n",engBond,count);
   //calculate bond energies
 #ifdef TIMERS
@@ -1071,9 +1097,9 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
           intxn_energies[EN_VDW_EXACT]+=evdw;
           intxn_energies[EN_ELEC_EXACT]+=eelec;
       }
-#ifdef DEBUG
-      printf("Nonbonded interaction (moved): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
-#endif
+//#ifdef DEBUG
+//      printf("Nonbonded interaction (moved): %d %d %c %d %d %.10f %.10f\n",iatom,jatom,yesno(is14),atoms[iatom].type,atoms[jatom].type,evdw,eelec);
+//#endif
 #ifdef TIMERS
       switch_timer(TIMER_NT_PRECUTOFF);
 #endif
