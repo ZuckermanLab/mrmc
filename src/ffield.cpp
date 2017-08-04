@@ -733,13 +733,6 @@ void forcefield::moved_non_tabulated_energy(double eps, int rdie, double lambda_
       dz=coords[3*jatom+2]-coords[3*iatom+2];
       r2=dx*dx+dy*dy+dz*dz;
       if (r2>cutoff2) continue;
-//#ifdef WARN
-//      if (r2<1.0) {
-         //atoms within 1 A
-//         printf("warning: close atoms %s %d %s and %s %d %s distance %.2f A\n",
-//            atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resName,atoms[jatom].resNum+1,atoms[jatom].name,sqrt(r2));
-//      }
-//#endif
 #ifdef TIMERS
       switch_timer(TIMER_NT_VDW_ELEC);
 #endif
@@ -903,13 +896,6 @@ void forcefield::non_tabulated_energy(double eps, int rdie, double lambda_vdw, d
       dz=coords[3*jatom+2]-coords[3*iatom+2];
       r2=dx*dx+dy*dy+dz*dz;
       if (r2>cutoff2) continue;
-#ifdef WARN
-      if (r2<1.0) {
-         //atoms within 1 A
-         printf("warning: close atoms %s %d %s and %s %d %s distance %.2f A\n",
-            atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name,atoms[jatom].resName,atoms[jatom].resNum+1,atoms[jatom].name,sqrt(r2));    
-      }
-#endif
 #ifdef SEDDD
       nonbond_energy(true,atoms[iatom].type,atoms[jatom].type,is14,r2,&evdw,&eelec); //does not take into account epsilon, just computes qi*qj/r2
       s_kl=params->c*(frac_volumes[iatom]+frac_volumes[jatom]); //eq. 2 from Garden and Zhorov paper
@@ -963,11 +949,8 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
 
   //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
 
-  for (i=1; i<EN_TERMS; i++) {
-      internal_energies[i]=0.0;
-      intxn_energies[i]=0.0;
-  }
-   
+
+
   //printf("bond stretching: %f kcal/mol, the number of interactions: %d\n",engBond,count);
   //calculate bond energies
 #ifdef TIMERS

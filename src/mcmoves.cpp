@@ -38,7 +38,7 @@ void simulation::rotate_atoms_by_point(subset atoms, const double * quat, const 
       for (k=0; k<3; k++) disp[k]=coords[3*iatom+k]-point[k];
       matmul(&rotmatrix[0][0],disp,newdisp);
       for (k=0; k<3; k++) coords[3*iatom+k]=point[k]+newdisp[k];
-  }
+    }
 }
 //return the subset of all atoms conected to atom iatom through bonds, except those in the exclude subset
 subset topology::follow_bonds(int iatom, const subset exclude)
@@ -213,7 +213,7 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vecto
     }
 }
 
-void simulation::do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * coords)
+void simulation::do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * actual_size, double * coords)
 {
     double disp[3],m,r;
     int k,iatom;
@@ -225,13 +225,16 @@ void simulation::do_ligand_trans(double movesize_small, double large_dist_frac, 
     } else {
         rand_trans_vector(movesize_small,&disp[0]);
     }
+    m = 0.0;
+    for (k=0; k<3; k++) m += disp[k]*disp[k];
+    *actual_size=sqrt(m);
     //translate all ligand atoms
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
     }
 }
 
-void simulation::do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * coords)
+void simulation::do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * actual_size, double * coords)
 {
     double quat[4],com[3],mass,totmass,r;
     int k, iatom;
@@ -250,14 +253,15 @@ void simulation::do_ligand_rot(double movesize_small, double large_dist_frac, do
     } else {
         rand_small_quat(movesize_small,&quat[0]);
     }
+    *actual_size = 2*acos(quat[0]);
     rotate_atoms_by_point(top->ligand,&quat[0],&com[0],coords);
 }
 
 //randomly move a heavy atom, togehter with any hydrogen atoms that may be bonded to it
-void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double * coords)
+void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double * actual_size, double * coords)
 {
     int iatom,iheavy,j,jatom,k;
-    double disp[3];
+    double disp[3],m;
     //choose a heavy atom at random
     for (;;) {
         iheavy=int(genrand_real3()*top->natom);
@@ -269,12 +273,15 @@ void simulation::heavy_atom_trans(subset * movedatoms, double movesize, double *
         if (top->atoms[jatom].atomicNum==1) *movedatoms+=jatom;
     }
     rand_trans_vector(movesize,&disp[0]);
+    m = 0.0;
+    for (k=0; k<3; k++) m += disp[k]*disp[k];
+    *actual_size=sqrt(m);
     for (iatom=0; iatom<top->natom; iatom++) if ((*movedatoms)[iatom]) {
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
     }
 }
 
-void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * coords)
+void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * actual_size, double * coords)
 {
     int iatom,iheavy,j,jatom,k;
     double q[4];
@@ -289,10 +296,11 @@ void simulation::heavy_atom_rot(subset * movedatoms, double movesize, double * c
         if (top->atoms[jatom].atomicNum==1) *movedatoms+=jatom;
     }
     rand_small_quat(movesize,&q[0]);
+    *actual_size = 2*acos(q[0]);
     rotate_atoms_by_point(*movedatoms,&q[0],&coords[3*iheavy],coords);
 }
 
-void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
+void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_size, double * coords)
 {
     mc_move * movelist;
     int moveindex,move, movecount;
@@ -324,18 +332,18 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
             movecount=ligand_bond_rotation_moves.size();
             break;
         case MOVE_LIGAND_TRANS:
-            do_ligand_trans(movesize[MOVE_LIGAND_TRANS],large_dist_frac[MOVE_LIGAND_TRANS],movesize_large[MOVE_LIGAND_TRANS],coords);
+            do_ligand_trans(movesize[MOVE_LIGAND_TRANS],large_dist_frac[MOVE_LIGAND_TRANS],movesize_large[MOVE_LIGAND_TRANS],actual_size,coords);
             *movedatoms=top->ligand;
             break;
         case MOVE_LIGAND_ROT:
-            do_ligand_rot(movesize[MOVE_LIGAND_ROT],large_dist_frac[MOVE_LIGAND_ROT],movesize_large[MOVE_LIGAND_ROT],coords);
+            do_ligand_rot(movesize[MOVE_LIGAND_ROT],large_dist_frac[MOVE_LIGAND_ROT],movesize_large[MOVE_LIGAND_ROT],actual_size,coords);
             *movedatoms=top->ligand;
             break;
         case MOVE_HEAVY_TRANS:
-            heavy_atom_trans(movedatoms,movesize[MOVE_HEAVY_TRANS],coords);
+            heavy_atom_trans(movedatoms,movesize[MOVE_HEAVY_TRANS],actual_size,coords);
             break;
         case MOVE_HEAVY_ROT:
-            heavy_atom_rot(movedatoms,movesize[MOVE_HEAVY_ROT],coords);
+            heavy_atom_rot(movedatoms,movesize[MOVE_HEAVY_ROT],actual_size,coords);
             break;
         default:
             printf("Error in switch statement.\n");
@@ -347,6 +355,7 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * coords)
         *movedatoms=movelist[moveindex].movedatoms;
         //top->print_atom_subset(*movedatoms);
         angle=(2.0*genrand_real3()-1.0)*movesize[move];
+        *actual_size=angle;
         rotate_atoms_by_axis(&movelist[moveindex],angle,coords);
     }
 }

@@ -149,13 +149,13 @@ private:
     void read_go_model_info(FILE * input);
     //MC move support -- these are in mcmoves.cpp
     void read_move_info(FILE * input);
-    void mcmove(int * movetype, subset * movedatoms, double * coords);
+    void mcmove(int * movetype, subset * movedatoms, double * actual_size, double * coords);
     void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
     void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
-    void do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * coords);
-    void do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * coords);
-    void heavy_atom_trans(subset * movedatoms, double movesize, double * coords);
-    void heavy_atom_rot(subset * movedatoms, double movesize, double * coords);
+    void do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * actual_size, double * coords);
+    void do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * actual_size, double * coords);
+    void heavy_atom_trans(subset * movedatoms, double movesize, double * actual_size, double * coords);
+    void heavy_atom_rot(subset * movedatoms, double movesize, double * actual_size, double * coords);
     //dock prep related stuff -- see init.cpp
     void set_ligand_com(double * desired_com, double * coords);
     void align_ligand_with_aa_region(double * coords);

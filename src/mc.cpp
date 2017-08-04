@@ -323,6 +323,7 @@ void simulation::fakeloop(void)
     subset movedatoms;
     int movetype,ifrag;
     double fresh_energy, fresh_energies[EN_TERMS];
+    double actual_size;
     xyzoutput = fopen(xyzfname,"wb"); //DCD file
     if (xyzoutput==NULL) {
         printf("Could not open DCD trajectory file %s\n",xyzfname);
@@ -342,7 +343,7 @@ void simulation::fakeloop(void)
     zwrite = (float *) checkalloc(top->natom,sizeof(float));
     movedatoms.init(top->natom);
     for (istep=1; istep<=nmcstep; istep++) {
-        mcmove(&movetype,&movedatoms,newcoords);
+        mcmove(&movetype,&movedatoms,&actual_size,newcoords);
 	//total_energy(newcenter,neworient,newcoords,fresh_energies,&fresh_energy);
         //print_energies(FALSE,"Energy:",istep,fresh_energies,fresh_energy);
         //printf("step %ld:  %s move.\n",istep,mc_move_names[movetype]);
@@ -382,7 +383,7 @@ void simulation::mcloop(void)
     int movetype,i,k;
     bool new_nb_list;
     bool accepted;
-    double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev,sumprob[NUM_MOVES+1],avgprob;
+    double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev,sumprob[NUM_MOVES+1],avgprob,actual_size;
     double cputime,elapsedtime;
     double oldenergies[EN_TERMS],newenergies[EN_TERMS],cum_energies[EN_TERMS],fresh_energies[EN_TERMS];
     bool lambda_changed, lambda_has_been_changed;
@@ -509,7 +510,7 @@ void simulation::mcloop(void)
 #ifdef TIMERS
          switch_timer(TIMER_MC_MOVE);
 #endif
-         mcmove(&movetype,&movedatoms,newcoords);
+         mcmove(&movetype,&movedatoms,&actual_size,newcoords);
 #ifdef DEBUG
          printf("Performing move %ld: %s\n",istep,mc_move_names[movetype]);
 #endif
@@ -574,8 +575,9 @@ void simulation::mcloop(void)
              }
          }
          if (mc_log!=NULL) {
+             if (!((movetype==MOVE_LIGAND_TRANS)||(movetype==MOVE_HEAVY_TRANS))) actual_size*=RAD_TO_DEG;
              //Log file: step number, move type, deltaU, probability, accepted?, "*"...
-             fprintf(mc_log,"%ld %s %g %g %c : ",istep+1,mc_move_names[movetype],de,p,yesno(accepted));
+             fprintf(mc_log,"%ld %s %g %g %g %c : ",istep+1,mc_move_names[movetype],actual_size,de,p,yesno(accepted));
              //write out components of the energy difference
              for (i=0; i<EN_TERMS; i++) fprintf(mc_log,"%g ",newenergies[i]-oldenergies[i]);
              fprintf(mc_log,"\n");

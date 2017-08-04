@@ -539,7 +539,7 @@ void simulation::align_ligand_with_aa_region(double * coords)
 
 void simulation::prepare_docking(double trans_size, double rot_size, int nsearch, double * coords)
 {
-    double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand,x[3],q[4],rmsd;
+    double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand,x[3],q[4],rmsd,junk;
     int iatom,k,imove;
     double angle;
     double * private_coords;
@@ -582,8 +582,8 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         //restore coordinates from original
         for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) private_coords2[3*iatom+k]=private_coords[3*iatom+k];
         //give a random displacement and orientation
-        do_ligand_trans(trans_size,0.0,trans_size,private_coords2);
-        do_ligand_rot(rot_size,0.0,rot_size,private_coords2);
+        do_ligand_trans(trans_size,0.0,trans_size,&junk,private_coords2);
+        do_ligand_rot(rot_size,0.0,rot_size,&junk,private_coords2);
         //rotate by random extents around rotatable bonds
         for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
