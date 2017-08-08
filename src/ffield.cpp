@@ -947,9 +947,6 @@ void forcefield::subset_energy(double eps, int rdie, double cutoff2, int numOfAt
 #endif
   //zero out all energy terms excapt interactions, which may have been previously calculated
 
-  //for (i=1; i<EN_TERMS; i++) energies[i]=0.0;
-
-
 
   //printf("bond stretching: %f kcal/mol, the number of interactions: %d\n",engBond,count);
   //calculate bond energies
