@@ -403,10 +403,16 @@ void fortran_fwrite(const void * ptr, size_t size, size_t count, FILE * stream)
 void simulation::write_dcd_header(FILE * dcdfile)
 {
     int i;
+    int nf_per_block;
     dcd_header hdr;
     dcd_titles titles;
     strncpy(hdr.signature,charmm_signature,sizeof(hdr.signature));
-    hdr.nframes = (nmcstep/nsave);
+    if (do_ncmc && !ncmc_write_frames) {
+       nf_per_block=1+(nsteps_block-nsteps_temper_move)/nsave;
+       hdr.nframes = (nmcstep/nsteps_block)*nf_per_block;
+    } else { 
+       hdr.nframes = (nmcstep/nsave);
+    }
     hdr.begin = nprevstep + nsave; //I think this is correct for multiple files, but not absolutely sure
     hdr.skip = nsave;
     hdr.nstep = nmcstep;

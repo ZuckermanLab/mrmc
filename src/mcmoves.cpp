@@ -239,14 +239,7 @@ void simulation::do_ligand_rot(double movesize_small, double large_dist_frac, do
     double quat[4],com[3],mass,totmass,r;
     int k, iatom;
     //find the center of mass of the ligand.
-    totmass=0.0;
-    for (k=0; k<3; k++) com[k]=0.0;
-    for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
-        mass=top->atoms[iatom].mass;
-        for (k=0; k<3; k++) com[k]+=mass*coords[3*iatom+k];
-        totmass+=mass;
-    }
-    for (k=0; k<3; k++) com[k]/=totmass;
+    get_ligand_com(coords,com);
     r=genrand_real3();
     if (r<large_dist_frac) {
         rand_small_quat(movesize_large,&quat[0]);

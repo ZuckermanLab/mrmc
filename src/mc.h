@@ -102,14 +102,15 @@ private:
     //double * en_by_table;
     int nres; //nres is for temporary use until the topology object can be fully initialized
     //stuff for Mobley hamiltonian tempering
-    bool do_ncmc;
-    int  nsteps_temper_move, n_lambda_schedule;
+    bool do_ncmc, ncmc_write_frames;
+    long int  nsteps_temper_move, n_lambda_schedule, nsteps_block, ncmc_move_start_step, ncmc_move_end_step;
     lambda_sched_info * lambda_schedule;
     double current_lambda_vdw, current_lambda_elec;
     double current_noneq_work;
     double * oldcoords_ncmc;
     int natt_ncmc, nacc_ncmc;
     double sumprob_ncmc;
+    bool lambda_has_been_changed;
     //double * old_frac_volumes_ncmc;
     //std::vector<atom_nb_entry> old_pair_list_ncmc, old_solv_list_ncmc;
 
@@ -157,6 +158,7 @@ private:
     void heavy_atom_trans(subset * movedatoms, double movesize, double * actual_size, double * coords);
     void heavy_atom_rot(subset * movedatoms, double movesize, double * actual_size, double * coords);
     //dock prep related stuff -- see init.cpp
+    void get_ligand_com(double * coords, double * com_ligand);
     void set_ligand_com(double * desired_com, double * coords);
     void align_ligand_with_aa_region(double * coords);
     void prepare_docking(double trans_size, double rot_size,  int nsearch, double * coords);
@@ -170,8 +172,10 @@ private:
     void energy_analysis(char * type, char * fname,  char * enfname);
     //for ncmc
     void read_lambda_schedule(char * fname);
-    void adjust_lambdas_and_accumulate_work(long int istep, bool * lambda_changed);
+    void adjust_lambdas_and_accumulate_work(long int istep);
+    void start_ncmc_move(void);
     void perform_ncmc_move(void);
+    void ncmc_init(void);
 public:
     void comparison_test(void);
 #if defined(PARALLEL) || defined(EXCHANGE)

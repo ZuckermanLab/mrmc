@@ -386,7 +386,6 @@ void simulation::mcloop(void)
     double cum_energy,fresh_energy,enew,eold,de,de2,r,p,accrate,deviation,maxdev,sumprob[NUM_MOVES+1],avgprob,actual_size;
     double cputime,elapsedtime;
     double oldenergies[EN_TERMS],newenergies[EN_TERMS],cum_energies[EN_TERMS],fresh_energies[EN_TERMS];
-    bool lambda_changed, lambda_has_been_changed;
     //bool * moved;
     subset movedatoms;
     subset changedvol; //which atoms have changed fractional volume
@@ -409,10 +408,6 @@ void simulation::mcloop(void)
     newcoords=(double *) checkalloc(3*top->natom,sizeof(double));
     for (i=0; i<3*top->natom; i++) oldcoords[i]=initcoords[i];
     for (i=0; i<3*top->natom; i++) newcoords[i]=oldcoords[i];
-    if (do_ncmc) {
-        oldcoords_ncmc = (double *) checkalloc(3*top->natom,sizeof(double));
-        for (i=0; i<3*top->natom; i++) oldcoords_ncmc[i]=oldcoords[i];
-    }
     if (strcasecmp(trajfmt,"DCD")==0) {
         xyzoutput=fopen(xyzfname,"wb");
     } else if (strcasecmp(trajfmt,"PDB")==0) {
@@ -463,11 +458,6 @@ void simulation::mcloop(void)
         natt[i]=0;
         sumprob[i]=0.0;
     }
-    if (do_ncmc) {
-        nacc_ncmc=0;
-        natt_ncmc=0;
-        sumprob_ncmc=0.0;
-    }
     acc_by_atom = (long int *) checkalloc(top->natom,sizeof(long int));
     att_by_atom = (long int *) checkalloc(top->natom,sizeof(long int));
     for (i=0; i<top->natom; i++) {
@@ -504,8 +494,7 @@ void simulation::mcloop(void)
     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
     cum_energy=fresh_energy;
     //die();
-    current_noneq_work=0.0;
-    lambda_has_been_changed=false;
+    if (do_ncmc) ncmc_init();
     for (istep=1; istep<=nmcstep; istep++) {
 #ifdef TIMERS
          switch_timer(TIMER_MC_MOVE);
@@ -564,14 +553,21 @@ void simulation::mcloop(void)
              for (i=0; i<top->natom; i++) new_frac_volumes[i]=old_frac_volumes[i];
          }
          if (do_ncmc) {
-             adjust_lambdas_and_accumulate_work(istep,&lambda_changed);
-             //We need to keep track of if there have been any lambda changes in the interval between two energy printouts to avoid the cum/fresh energy check.
-             lambda_has_been_changed = lambda_has_been_changed || lambda_changed;
+             if ((istep%nsteps_block)==1) {
+                //choose a random step number to start the NCMC move within the block
+                ncmc_move_start_step=istep; //+int(genrand_real3()*(nsteps_block-nsteps_temper_move));
+                ncmc_move_end_step=ncmc_move_start_step+nsteps_temper_move-1;
+             }
+             if (istep==ncmc_move_start_step) start_ncmc_move();
+             if ((istep>=ncmc_move_start_step) && (istep<=ncmc_move_end_step)) {
+                //we are in the middle of an NCMC move
+                adjust_lambdas_and_accumulate_work(istep);
+
+             }
              //this will eventually be replaced by a subroutine for accepting/rejecting the NCMC move
-             if ((istep%nsteps_temper_move)==0) {
+             if (istep==ncmc_move_end_step) {
                  printf("Step %ld: Nonequilibrium work: %.6f kcal/mol\n",istep,current_noneq_work);
                  perform_ncmc_move();
-                 current_noneq_work=0.0;
              }
          }
          if (mc_log!=NULL) {
@@ -586,15 +582,19 @@ void simulation::mcloop(void)
          //Now, "new" and "old" should be the same again, and on the MC trajectory.
          //Handle saving and printing.
          if ((istep%nsave)==0) {
-             if (strcasecmp(trajfmt,"DCD")==0) {
-                write_dcd_frame(xyzoutput,newcoords);
-             } else if (strcasecmp(trajfmt,"PDB")==0) {
-                fprintf(xyzoutput,"MODEL     %4d\n",istep/nsave);
-                top->write_pdb_stream(xyzoutput,newcoords,new_frac_volumes);
-                fprintf(xyzoutput,"ENDMDL\n");
-             }
-             //write_frame_quat(quatoutput,istep,newcenter,neworient);
-             fflush(xyzoutput);
+            //Do not write this frame if:
+            //we are doing NCMC AND we are in the middle of an NCMC move AND the NCMC write flag has not been set.
+            if (!(do_ncmc && !ncmc_write_frames && (istep>ncmc_move_start_step) && (istep<ncmc_move_end_step))) {
+                if (strcasecmp(trajfmt,"DCD")==0) {
+                    write_dcd_frame(xyzoutput,newcoords);
+                } else if (strcasecmp(trajfmt,"PDB")==0) {
+                    fprintf(xyzoutput,"MODEL     %4d\n",istep/nsave+1);
+                    top->write_pdb_stream(xyzoutput,newcoords,new_frac_volumes);
+                    fprintf(xyzoutput,"ENDMDL\n");
+                }
+                //write_frame_quat(quatoutput,istep,newcenter,neworient);
+                fflush(xyzoutput);
+            }
          }
          if ((istep%nprint)==0) {
              fflush(mc_log);

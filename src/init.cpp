@@ -55,6 +55,7 @@ simulation::simulation(void)
     lambda_schedule = NULL;
     current_lambda_vdw=1.0;
     current_lambda_elec=1.0;
+    ncmc_write_frames = false;
 }
 
 
@@ -248,13 +249,24 @@ void simulation::process_commands(char * infname)
             strncpy(word,token,sizeof(word));
             sscanf(word,"%lg %lg",&current_lambda_vdw,&current_lambda_elec);
         } else if (strcasecmp("NCMC",token)==0) {
+            //NCMC move_length block_length lambda_schedule_file [WRITE_FRAMES_IN_MOVE]
             do_ncmc=true;
             printf("Nonequilibriumm Candidate Monte Carlo enabled.\n");
-            token=strtok(NULL,delim);
+            token+=strlen(token)+1;
             strncpy(word,token,sizeof(word));
-            sscanf(word,"%ld",&nsteps_temper_move);
-            token=strtok(NULL,delim);
-            strncpy(fname,token,sizeof(fname));
+            ncmc_write_frames=((strstr(word,"WRITE_FRAMES_IN_MOVE")!=NULL) || (strstr(word,"write_frames_in_move")!=NULL));
+            sscanf(word,"%ld %ld %s",&nsteps_temper_move,&nsteps_block,fname);
+            if (nsteps_block<nsteps_temper_move) {
+               printf("Number of steps in block must exceed number in NCMC move.\n");
+               die();
+            }
+            printf("Each block of %ld moves will include one NCMC move of %ld moves and %ld additional regular MC moves.\n",
+		nsteps_block,nsteps_temper_move,nsteps_block-nsteps_temper_move);
+            if (ncmc_write_frames) {
+                printf("Frames within NCMC moves will be written to the trajectory.\n");
+            } else {
+                printf("Frames within NCMC moves will not be written to the trajectory.\n");
+            }
             read_lambda_schedule(fname);
         } else if (strcasecmp("SEED",token)==0) {
             token=strtok(NULL,delim);
@@ -502,12 +514,10 @@ void simulation::finish_initialization(void)
     initialized=true;
 }
 
-//position the ligand's center of mass
-void simulation::set_ligand_com(double * desired_com, double * coords)
+void simulation::get_ligand_com(double * coords, double * com_ligand)
 {
-    double com_ligand[3], mass_ligand, disp[3];
-    int iatom, k;
-    //Move the ligand COM to superimpose over the COM of the all-atom region.
+    int iatom,k;
+    double mass_ligand;
     for (k=0; k<3; k++) com_ligand[k]=0.0;
     mass_ligand=0.0;
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
@@ -515,12 +525,22 @@ void simulation::set_ligand_com(double * desired_com, double * coords)
         for (k=0; k<3; k++) com_ligand[k]+=top->atoms[iatom].mass*coords[3*iatom+k];
     }
     for (k=0; k<3; k++) com_ligand[k]/=mass_ligand;
+}
+
+//position the ligand's center of mass
+void simulation::set_ligand_com(double * desired_com, double * coords)
+{
+    double com_ligand[3], mass_ligand, disp[3];
+    int iatom, k;
+    //Move the ligand COM to superimpose over the COM of the all-atom region.
+    get_ligand_com(coords,com_ligand);
     for (k=0; k<3; k++) disp[k]=desired_com[k]-com_ligand[k];
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp[k];
     }
     printf("Set ligand COM to coordinates %.3f %.3f %.3f\n",desired_com[0],desired_com[1],desired_com[2]);
 }
+
 
 void simulation::align_ligand_with_aa_region(double * coords)
 {
