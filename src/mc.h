@@ -79,7 +79,7 @@ private:
     double beta; /*Monte Carlo temperature, expressed as beta*/
 
     long int nmcstep, nsave, nprint,ncheck,nprevstep; /*number of MC steps, frequency of saving conformations, frequency of printing*/
-    double prob[NUM_MOVES+1],cumprob[NUM_MOVES+1],movesize[NUM_MOVES+1];
+    double prob[NUM_MOVES+1],cumprob[NUM_MOVES+1],movesize[NUM_MOVES+1],stiff_move_size;
     //This allocates room for parameters for a split distribution.  large_dist_frac is the fraction of t
     double large_dist_frac[NUM_MOVES+1],movesize_large[NUM_MOVES+1];
     vector<mc_move> backbone_moves;

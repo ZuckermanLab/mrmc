@@ -261,7 +261,7 @@ void simulation::process_commands(char * infname)
                die();
             }
             printf("Each block of %ld moves will include one NCMC move of %ld moves and %ld additional regular MC moves.\n",
-		nsteps_block,nsteps_temper_move,nsteps_block-nsteps_temper_move);
+                nsteps_block,nsteps_temper_move,nsteps_block-nsteps_temper_move);
             if (ncmc_write_frames) {
                 printf("Frames within NCMC moves will be written to the trajectory.\n");
             } else {
@@ -581,7 +581,8 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
     }
     printf("Randomizing bonds in ligand.\n");
-    for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) {
+    for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) 
+	if (!ligand_bond_rotation_moves[imove].is_stiff) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*M_PI;
@@ -604,8 +605,9 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         //give a random displacement and orientation
         do_ligand_trans(trans_size,0.0,trans_size,&junk,private_coords2);
         do_ligand_rot(rot_size,0.0,rot_size,&junk,private_coords2);
-        //rotate by random extents around rotatable bonds
-        for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) {
+        //rotate by random extents around rotatable bonds -- do not include  "stiff" bonds
+        for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++)
+            if (!ligand_bond_rotation_moves[imove].is_stiff) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*M_PI;

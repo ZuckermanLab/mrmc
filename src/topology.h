@@ -52,6 +52,7 @@ struct resfraginfo {
 struct mc_move {
     //atoms forming axis around which
     int iaxis, jaxis;
+    bool is_stiff;
     subset movedatoms;
     //void perform(double * coords);
 };
@@ -65,6 +66,7 @@ struct residuedef {
     char iname[MAX_BONDS_PER_RESIDUE][6];//Atoms pair for each bond.
     char jname[MAX_BONDS_PER_RESIDUE][6];
     int rottype[MAX_BONDS_PER_RESIDUE]; //Is this bond rotatable? If so, MC moves are generated based on rotation about this bond.
+    bool is_stiff[MAX_BONDS_PER_RESIDUE];
     int joffset[MAX_BONDS_PER_RESIDUE]; //Residue offset on "j" atom.
     //int nfrag; //Number of fragments intersecting this residue.
     //resfraginfo frags[MAX_FRAGMENTS_PER_RESIDUE];
@@ -78,11 +80,11 @@ struct reslookup {
     int atomstart;
     int atomend;
     //int nscrot; //Number of backbone and sidechain rotatable bonds.
-    int nbbrot;
+    //int nbbrot;
     /*int iscrot[MAX_BONDS_PER_RESIDUE];
     int jscrot[MAX_BONDS_PER_RESIDUE];*/
-    int ibbrot[MAX_BONDS_PER_RESIDUE];
-    int jbbrot[MAX_BONDS_PER_RESIDUE]; //Is the bond part of the side chain?
+    //int ibbrot[MAX_BONDS_PER_RESIDUE];
+    //int jbbrot[MAX_BONDS_PER_RESIDUE]; //Is the bond part of the side chain?
     //int peptidebond; //Number of the actual peptide bond fragment.
     //int sidechainstart; //Starting fragment of the side chain.
     //int sidechainend; //Ending fragment of the side chain.
@@ -92,7 +94,7 @@ struct topology {
     //int nfragtypes;
     //fragmenttype * * fragtypes; //[MAX_FRAGMENT_TYPES];
     /*number of actual fragments, total number of atoms*/
-    int natom,nseg,nres,nscrot,ngroup;
+    int natom,nseg,nres;//nscrot,ngroup;
     /*which type of fragments each fragment is*/
     //fragment * frags; //[MAX_FRAGMENTS];
     //virtual_site * virtual_sites;
@@ -100,8 +102,9 @@ struct topology {
     //int * fragstart;  //[MAX_FRAGMENTS];
     /*Atom information*/
     ATOMS * atoms;  //[MAX_ATOMS];
-    int * iscrot;
-    int * jscrot;
+    //int * iscrot;
+    //int * jscrot;
+    bool * is_stiff_rot;
     int nresdef;
     residuedef * resdef;
     reslookup * resinfo;

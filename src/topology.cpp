@@ -67,13 +67,13 @@ topology::topology(const char * commandfile, forcefield * ffield)
     natom=0;
     nseg=0;
     nres=0;
-    nscrot=0;
+    //nscrot=0;
     segstart=NULL;
     segend=NULL;
     first_main_chain_frag=NULL;
     chaincodes=NULL;
-    iscrot=NULL;
-    jscrot=NULL;
+    //iscrot=NULL;
+    //jscrot=NULL;
     qsystem=0.0;
     ligand_res=-1;
     /*whichseg=NULL;
@@ -189,7 +189,7 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
                 def->joffset[def->nbond]=0;
                 strncpy(def->jname[def->nbond],token,sizeof(def->jname[def->nbond]));
             }
-            if (strstr(command,"ROTATABLE")!=NULL) {
+            if ((strstr(command,"ROTATABLE")!=NULL) || (strstr(command,"STIFF")!=NULL)){
                 if (strstr(command,"BACKBONE")!=NULL) {
                     def->rottype[def->nbond]=RT_BACKBONE;
                 } else if (strstr(command,"SIDECHAIN")!=NULL) {
@@ -199,6 +199,7 @@ void topology::read_residue_definition(FILE * f, residuedef * def)
                         def->name,def->iname[def->nbond],def->jname[def->nbond]);
                     die();
                 }
+                def->is_stiff[def->nbond]=(strstr(command,"STIFF")!=NULL);
             } else def->rottype[def->nbond]=RT_NOT_ROTATABLE;
             def->nbond++;
 /*
@@ -280,12 +281,12 @@ void topology::print_detailed_info(subset aaregion_res)
     for (ires=0; ires<nres; ires++) {
         printf("%d, %d, %d (%.4s), %d, %d, %d, %c\n",ires,resinfo[ires].whichseg,resinfo[ires].restype,
         resdef[resinfo[ires].restype].name,resinfo[ires].branchatom, resinfo[ires].atomstart,resinfo[ires].atomend, yesno(aaregion_res[ires]));
-        for (ibond=0; ibond<resinfo[ires].nbbrot; ibond++) printf("Backbone bond %d-%d is rotatable.\n",resinfo[ires].ibbrot[ibond],resinfo[ires].jbbrot[ibond]);
+        //for (ibond=0; ibond<resinfo[ires].nbbrot; ibond++) printf("Backbone bond %d-%d is rotatable.\n",resinfo[ires].ibbrot[ibond],resinfo[ires].jbbrot[ibond]);
 
         printf("\n");
     }
     printf("\n");
-    for (ibond=0; ibond<nscrot; ibond++) printf("Side chain bond %d-%d is rotatable.\n",iscrot[ibond],jscrot[ibond]);
+    //for (ibond=0; ibond<nscrot; ibond++) printf("Side chain bond %d-%d is rotatable.\n",iscrot[ibond],jscrot[ibond]);
     printf("\n");
     //Fragment info:
 /*
@@ -324,7 +325,7 @@ void topology::print_summary_info(void)
     printf("Number of residues:                     %d\n",nres);
     printf("Number of atoms:                        %d\n",natom);
 
-    printf("Number of side chain rotatable bonds: %d\n",nscrot);
+    //printf("Number of side chain rotatable bonds: %d\n",nscrot);
     printf("Total system charge:                  %.2f\n",qsystem);
 }
 
@@ -351,7 +352,7 @@ void topology::insert_residue(const char * res, forcefield * ffield)
     resinfo[nres].restype=restype;
     resinfo[nres].atomstart=natom;
     resinfo[nres].atomend=natom+nnewatom-1;
-    resinfo[nres].nbbrot=0;
+    //resinfo[nres].nbbrot=0;
     //resinfo[nres].nscrot=0;
     //Insert all atoms into array.
     atoms=(ATOMS *) checkrealloc(atoms,natom+nnewatom,sizeof(ATOMS));
@@ -367,7 +368,7 @@ void topology::insert_residue(const char * res, forcefield * ffield)
         atoms[natom].is_backbone=((strncmp(atoms[natom].name,"N",sizeof(atoms[natom].name))==0) ||
                                     (strncmp(atoms[natom].name,"CA",sizeof(atoms[natom].name))==0) ||
                                     (strncmp(atoms[natom].name,"C",sizeof(atoms[natom].name))==0));
-	atoms[natom].classx=ffield->atomTypeLookUp[atoms[natom].type].classx;
+        atoms[natom].classx=ffield->atomTypeLookUp[atoms[natom].type].classx;
         atoms[natom].atomicNum=ffield->atomTypeLookUp[atoms[natom].type].atomicNum;
         atoms[natom].mass=ffield->atomTypeLookUp[atoms[natom].type].mass;
         natom++;
@@ -451,27 +452,28 @@ void topology::insert_residue(const char * res, forcefield * ffield)
             die();
         }
         //Only add backbone bonds if not in the all-atom region.
-	evaluable=(aaregion_res[nres] || (atoms[iatom].is_backbone && atoms[jatom].is_backbone));
+        evaluable=(aaregion_res[nres] || (atoms[iatom].is_backbone && atoms[jatom].is_backbone));
         atoms[iatom].bondedAtomList[atoms[iatom].numOfBondedAtoms]=jatom;
-	atoms[iatom].evaluableBond[atoms[iatom].numOfBondedAtoms]=evaluable;
+        atoms[iatom].evaluableBond[atoms[iatom].numOfBondedAtoms]=evaluable;
         atoms[iatom].numOfBondedAtoms++;
         atoms[jatom].bondedAtomList[atoms[jatom].numOfBondedAtoms]=iatom;
         atoms[jatom].evaluableBond[atoms[jatom].numOfBondedAtoms]=evaluable;
         atoms[jatom].numOfBondedAtoms++;
         //If the bond is rotatable, include it in appropriate list.  This information is used to generate Monte Carlo moves.
-        if (resdef[restype].rottype[ibond]==RT_BACKBONE) {
+        //This logic and associated data structures are  made unnecessary by rewriting generate_sidechain_moves
+        /*if (resdef[restype].rottype[ibond]==RT_BACKBONE) {
             resinfo[nres].ibbrot[resinfo[nres].nbbrot]=iatom;
             resinfo[nres].jbbrot[resinfo[nres].nbbrot]=jatom;
             resinfo[nres].nbbrot++;
         } else if (aaregion_res[nres] && resdef[restype].rottype[ibond]==RT_SIDECHAIN) { //only add side chains if in the all-atom region
-            /*resinfo[nres].iscrot[resinfo[nres].nscrot]=iatom;
-            resinfo[nres].jscrot[resinfo[nres].nscrot]=jatom;*/
             iscrot=(int *)checkrealloc(iscrot,nscrot+1,sizeof(int));
             jscrot=(int *)checkrealloc(jscrot,nscrot+1,sizeof(int));
+            is_stiff_rot=(bool *)checkrealloc(is_stiff_rot,nscrot+1,sizeof(bool));
             iscrot[nscrot]=iatom;
             jscrot[nscrot]=jatom;
+            is_stiff_rot[nscrot]=resdef[restype].is_stiff[ibond];
             nscrot++;
-        }
+        }*/
 
         /*if (resdef[restype].rotatable[ibond]) {
             resinfo[nres].irotatable[resinfo[nres].nrotatable]=iatom;
@@ -484,7 +486,7 @@ void topology::insert_residue(const char * res, forcefield * ffield)
     }
     //this was a bug in the tablemc-proteins code as well -- this condition was inside the "ibond" loop,
     //so that the CB-CD bond was added once for every bond in the pro residue, not just once as it should have been.
-    if (aaregion_res[nres] && strcasecmp(resdef[restype].name,"PRO")==0) {
+    /*if (aaregion_res[nres] && strcasecmp(resdef[restype].name,"PRO")==0) {
         iatom=find_atom(nres,"CB");
         jatom=find_atom(nres,"CD");
         iscrot=(int *)checkrealloc(iscrot,nscrot+1,sizeof(int));
@@ -492,7 +494,7 @@ void topology::insert_residue(const char * res, forcefield * ffield)
         iscrot[nscrot]=iatom;
         jscrot[nscrot]=jatom;
         nscrot++;
-    }
+    }*/
     resinfo[nres].branchatom=resinfo[nres].atomstart+resdef[restype].branchatom;
     segend[nseg]=nres;
     //Need to construct atoms based on the definition.
@@ -994,8 +996,8 @@ topology::~topology()
     free(segend);
     free(first_main_chain_frag);
     free(chaincodes);
-    free(iscrot);
-    free(jscrot);
+    //free(iscrot);
+    //free(jscrot);
     //free(closefragments);
 }
 

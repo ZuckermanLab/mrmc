@@ -170,6 +170,7 @@ void topology::generate_backrub_moves(vector<mc_move> * backrub_moves)
 
 void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vector<mc_move> * ligand_bond_rotation_moves)
 {
+    int ires,restype;
     int ibond,iatom,nligand,n;
     mc_move newmove;
     subset exclude;
@@ -180,36 +181,51 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vecto
     temp.init(natom);
     nligand=0;
     for (iatom=0; iatom<natom; iatom++) if (ligand[iatom]) nligand++;
-    //We use the rotatable bond information collected while inserting the residues (topology::insert_residue)
-    for (ibond=0; ibond<nscrot; ibond++) {
-        newmove.iaxis=iscrot[ibond];
-        newmove.jaxis=jscrot[ibond];
-        exclude.init(natom);
-        exclude+=newmove.iaxis;
-        //need to prevent walking up the backbone for CB-CD "bond" in proline
-        if (strcmp(atoms[newmove.iaxis].resName,"PRO")==0) {
-            exclude+=find_atom(atoms[newmove.iaxis].resNum,"N");
-        }
-        newmove.movedatoms=follow_bonds(newmove.jaxis,exclude);
-        //If this move involves the ligand, then check to see if it involves more than half the atoms in the ligand.
-        //If so, invert it with respect to the ligand, so that the majority of atoms will not be moved
-        if (ligand[newmove.iaxis] && ligand[newmove.jaxis]) {
-            n=0;
-            for (iatom=0; iatom<natom; iatom++) if (newmove.movedatoms[iatom]) n++;
-            if (n>(nligand/2)) {
-                temp=ligand;
-                temp/=newmove.movedatoms;
-                newmove.movedatoms=temp;
+    for (ires=0; ires<nres; ires++) if (aaregion_res[ires]) {
+        restype=resinfo[ires].restype;
+        for (ibond=0; ibond<resdef[restype].nbond; ibond++) if (resdef[restype].rottype[ibond]==RT_SIDECHAIN) {
+            //this is duplicated from insert_residue in topology.cpp
+            //(but we don't need to worry about joffset since they are both in the same residue
+
+            newmove.iaxis=find_atom(ires,resdef[restype].iname[ibond]);
+            newmove.jaxis=find_atom(ires,resdef[restype].jname[ibond]);
+            newmove.is_stiff=resdef[restype].is_stiff[ibond];
+            exclude.init(natom);
+            exclude+=newmove.iaxis;
+            //need to prevent walking up the backbone for CB-CD "bond" in proline
+            if (strcmp(atoms[newmove.iaxis].resName,"PRO")==0) {
+                exclude+=find_atom(atoms[newmove.iaxis].resNum,"N");
             }
-            //make separate lists of the "sidechain" moves in the ligand
-            ligand_bond_rotation_moves->push_back(newmove);
-        } else {
-            sidechain_moves->push_back(newmove);
+            newmove.movedatoms=follow_bonds(newmove.jaxis,exclude);
+            //If this move involves the ligand, then check to see if it involves more than half the atoms in the ligand.
+            //If so, invert it with respect to the ligand, so that the majority of atoms will not be moved
+            if (ligand[newmove.iaxis] && ligand[newmove.jaxis]) {
+                n=0;
+                for (iatom=0; iatom<natom; iatom++) if (newmove.movedatoms[iatom]) n++;
+                if (n>(nligand/2)) {
+                    temp=ligand;
+                    temp/=newmove.movedatoms;
+                    newmove.movedatoms=temp;
+                }
+                //make separate lists of the "sidechain" moves in the ligand
+                ligand_bond_rotation_moves->push_back(newmove);
+            } else {
+                sidechain_moves->push_back(newmove);
+            }
+#ifdef DEBUG
+            printf("Adding sidechain move:\n");
+            print_atom_subset(newmove.movedatoms);
+#endif
         }
-/*#ifdef DEBUG
-        printf("Adding sidechain move:\n");
-        print_atom_subset(newmove.movedatoms);
-#endif*/
+        //do something about prolines
+        if (strcasecmp(resdef[restype].name,"PRO")==0) {
+            newmove.iaxis=find_atom(ires,"CB");
+            newmove.jaxis=find_atom(ires,"CD");
+            newmove.movedatoms.init(natom);
+            newmove.movedatoms+=find_atom(ires,"CG");
+            newmove.movedatoms+=find_atom(ires,"HG1");
+            newmove.movedatoms+=find_atom(ires,"HG2");
+        }
     }
 }
 
@@ -346,8 +362,12 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
         //pick a random move from the list
         moveindex=(int) (genrand_real3()*movecount);
         *movedatoms=movelist[moveindex].movedatoms;
-        //top->print_atom_subset(*movedatoms);
-        angle=(2.0*genrand_real3()-1.0)*movesize[move];
+        if (movelist[moveindex].is_stiff) {
+            angle=(2.0*genrand_real3()-1.0)*stiff_move_size;
+        } else {
+            //top->print_atom_subset(*movedatoms);
+            angle=(2.0*genrand_real3()-1.0)*movesize[move];
+        }
         *actual_size=angle;
         rotate_atoms_by_axis(&movelist[moveindex],angle,coords);
     }
@@ -390,7 +410,12 @@ void simulation::read_move_info(FILE * input)
                     large_dist_frac[move]=1-large_dist_frac[move];
                 }
             } else {
-                sscanf(command,"%s %lg %lg\n",word,&p,&size);
+                if (move==MOVE_LIGAND_BOND) {
+                    sscanf(command,"%s %lg %lg %lg\n",word,&p, &size, &stiff_move_size);
+                    stiff_move_size*=DEG_TO_RAD;
+                } else {
+                    sscanf(command,"%s %lg %lg\n",word,&p,&size);
+                }
                 prob[move]=p;
                 movesize[move]=size;
             }
