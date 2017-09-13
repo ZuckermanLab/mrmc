@@ -8,7 +8,8 @@ export PYTHONPATH=~/lib/python:$PYTHONPATH
 drugu=`echo $drug | awk '{print toupper($0)}'`
 #on the compute nodes "python" points to "/usr/bin/python" which doesn't seem to be able to handle parmed
 /usr/local/bin/python ../convert-to-tinker.py $drug.prm7 2501 51 $drug.prm
-/usr/local/bin/python ../create-defs-solvation.py $drug.prm7 $drugu 2501 defs-$drug.txt 51 solv-$drug.txt
+#the 2.0 is the dihedral cutoff for declaring a "stiff" double bond
+/usr/local/bin/python ../create-defs-solvation2.py $drug.prm7 $drugu 2501 defs-$drug.txt 51 solv-$drug.txt 2.0
 #append amber parameters and definitions to create a complete parameter set for the protein-ligand system
 cat ../amber99sb.prm $drug.prm > amber99sb-$drug.prm
 cat ../defs-amber99sb.txt defs-$drug.txt > defs-amber99sb-$drug.txt
