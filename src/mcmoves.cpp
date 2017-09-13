@@ -1,5 +1,5 @@
-#include <cstdio>
-#include <vector>
+#include <cstdio> 
+#include <vector> 
 #include <cctype>
 //#include "fragments.h"
 #include "topology.h"
@@ -437,6 +437,9 @@ void simulation::read_move_info(FILE * input)
             if (move==MOVE_LIGAND_ROT) {
                 printf("%.20s moves:  Overall fraction %.2f%% -- Smaller max size %.2f degrees -- Larger max size %.2f degrees  -- Large dist fraction %.2f%%\n",
                     mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,movesize_large[move]*RAD_TO_DEG,large_dist_frac[move]*100.0);
+            } else if (move==MOVE_LIGAND_BOND) {
+                printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees -- Stiff bonds %.2f degrees\n",
+                    mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,stiff_move_size*RAD_TO_DEG);    
             } else {
                 printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees\n",
                     mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG);
