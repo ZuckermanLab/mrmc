@@ -255,7 +255,7 @@ void simulation::process_commands(char * infname)
             token+=strlen(token)+1;
             strncpy(word,token,sizeof(word));
             ncmc_write_frames=((strstr(word,"WRITE_FRAMES_IN_MOVE")!=NULL) || (strstr(word,"write_frames_in_move")!=NULL));
-            sscanf(word,"%ld %ld %s",&nsteps_temper_move,&nsteps_block,fname);
+            sscanf(word,"%ld %ld %s %s",&nsteps_temper_move,&nsteps_block,fname,ncmc_log_fname);
             if (nsteps_block<nsteps_temper_move) {
                printf("Number of steps in block must exceed number in NCMC move.\n");
                die();
@@ -268,6 +268,7 @@ void simulation::process_commands(char * infname)
                 printf("Frames within NCMC moves will not be written to the trajectory.\n");
             }
             read_lambda_schedule(fname);
+            //printf("ncmc_log_fname: %s\n",ncmc_log_fname);
         } else if (strcasecmp("SEED",token)==0) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
@@ -280,11 +281,11 @@ void simulation::process_commands(char * infname)
         } else if (strcasecmp("SAVEFREQ",token)==0) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
-            sscanf(word,"%d",&nsave);
+            sscanf(word,"%ld",&nsave);
         } else if (strcasecmp("PRINTFREQ",token)==0) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
-            sscanf(word,"%d",&nprint);
+            sscanf(word,"%ld",&nprint);
         } else if (strncasecmp("TRAJ",token,4)==0) {
             token=strtok(NULL,delim);
             strncpy(trajfmt,token,sizeof(trajfmt));
@@ -345,7 +346,7 @@ void simulation::process_commands(char * infname)
         } else if ((strcasecmp("RUN",token)==0) || ((strcasecmp("MC",token)==0))) {
             token=strtok(NULL,delim);
             strncpy(word,token,sizeof(word));
-            sscanf(word,"%d",&nmcstep);
+            sscanf(word,"%ld",&nmcstep);
             if (!initialized) finish_initialization();
             mcloop();
         } else {
@@ -557,6 +558,73 @@ void simulation::align_ligand_with_aa_region(double * coords)
     set_ligand_com(com_aa_region,coords);
 }
 
+
+void simulation::get_aligned_ligand_rmsd(double * oldcoords, double * newcoords, double * backbone_rmsd, double * disp, double * q, double * ligand_rmsd)
+{
+    double * wt_backbone;
+    double * wt_ligand;
+    double * aligned_oldcoords;
+    int iatom, k;
+    FILE * output;
+    subset allatoms;
+    double backbone_disp[3],backbone_q[4], backbone_q2[4],backbone_center[3], nbackbone,m[3][3],temp[3]; //_total;
+    allatoms.init(top->natom);
+    wt_backbone=(double *) checkalloc(top->natom,sizeof(double));
+    wt_ligand=(double *) checkalloc(top->natom,sizeof(double));
+    aligned_oldcoords=(double *) checkalloc(3*top->natom,sizeof(double));
+    for (k=0; k<3; k++) backbone_center[k]=0.0;
+    nbackbone=0.0;
+    for (iatom=0; iatom<top->natom; iatom++) {
+        allatoms+=iatom;
+        if (strstr("N CA C",top->atoms[iatom].name)!=NULL) {
+            wt_backbone[iatom]=1.0;
+            nbackbone+=1.0;
+            for (k=0; k<3; k++) backbone_center[k]+=oldcoords[3*iatom+k];
+        } else wt_backbone[iatom]=0.0;
+        if (top->ligand[iatom]) wt_ligand[iatom]=1.0; else wt_ligand[iatom]=0.0;
+        for (k=0; k<3; k++) aligned_oldcoords[3*iatom+k]=oldcoords[3*iatom+k];
+    }
+    for (k=0; k<3; k++) backbone_center[k]/=nbackbone; //COM of backbone.
+    //translate the old coords to have COM of backbone at origin.
+    //for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) aligned_oldcoords[3*iatom+k]-=backbone_center[k];
+    //Compute backbone RMSD and net displacement and rotation needed to align.
+    rmsd_fit(top->natom,wt_backbone,oldcoords,newcoords,&backbone_disp[0],&backbone_q[0],backbone_rmsd);
+#ifdef DEBUG
+    printf("Backbone center:  %.4f %.4f %.4f\n",backbone_center[0],backbone_center[1],backbone_center[2]);
+    printf("Backbone displacement: %.4f %.4f %.4f  quat: %.4f %.4f %.4f %.4f\n",
+        backbone_disp[0],backbone_disp[1],backbone_disp[2],backbone_q[0],backbone_q[1],backbone_q[2],backbone_q[3]);
+#endif
+    //for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) aligned_oldcoords[3*iatom+k]+=backbone_disp[k];
+    rotate_atoms_by_point(allatoms,&backbone_q[0],&backbone_center[0],aligned_oldcoords);
+    for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) aligned_oldcoords[3*iatom+k]+=backbone_disp[k];
+    //check to see if alignment has been done properly
+#ifdef DEBUG
+    output=fopen("test-align.pdb","w");
+    fprintf(output,"MODEL  1\n");
+    top->write_pdb_stream(output,oldcoords,NULL);
+    fprintf(output,"ENDMDL\n");
+    fprintf(output,"MODEL  2\n");
+    top->write_pdb_stream(output,aligned_oldcoords,NULL);
+    fprintf(output,"ENDMDL\n");
+    fprintf(output,"MODEL  3\n");
+    top->write_pdb_stream(output,newcoords,NULL);
+    fprintf(output,"ENDMDL\n");
+    fclose(output);
+#endif
+    /*quat_to_matrix(&backbone_q[0],&m[0][0]);
+    //rotate aligned_oldcoords and translate.
+    for (iatom=0; iatom<top->natom; iatom++) {
+        matmul(&m[0][0],&aligned_oldcoords[3*iatom],&temp[0]);
+        for (k=0; k<3; k++) aligned_oldcoords[3*iatom+k]=temp[k]+backbone_center[k]+backbone_disp[k];
+    }*/
+    //aligned_oldcoords should now be aligned to newcoords via backbone.
+    rmsd_fit(top->natom,wt_ligand,aligned_oldcoords,newcoords,disp,q,ligand_rmsd);
+#ifdef DEBUG
+    printf("Ligand displacement: %.4f %.4f %.4f  quat: %.4f %.4f %.4f %.4f  RMSD: %.4f\n",
+        disp[0],disp[1],disp[2],q[0],q[1],q[2],q[3],*ligand_rmsd);
+#endif
+}
+
 void simulation::prepare_docking(double trans_size, double rot_size, int nsearch, double * coords)
 {
     double com_aa_region[3],com_ligand[3],disp[3],mass_aa,mass_ligand,x[3],q[4],rmsd,junk;
@@ -581,7 +649,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
         for (k=0; k<3; k++) private_coords[3*iatom+k]=coords[3*iatom+k];
     }
     printf("Randomizing bonds in ligand.\n");
-    for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++) 
+    for (imove=0; imove<ligand_bond_rotation_moves.size(); imove++)
 	if (!ligand_bond_rotation_moves[imove].is_stiff) {
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {

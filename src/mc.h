@@ -111,6 +111,8 @@ private:
     int natt_ncmc, nacc_ncmc;
     double sumprob_ncmc;
     bool lambda_has_been_changed;
+    FILE * ncmc_log;
+    char ncmc_log_fname[255];
     //double * old_frac_volumes_ncmc;
     //std::vector<atom_nb_entry> old_pair_list_ncmc, old_solv_list_ncmc;
 
@@ -162,6 +164,8 @@ private:
     void set_ligand_com(double * desired_com, double * coords);
     void align_ligand_with_aa_region(double * coords);
     void prepare_docking(double trans_size, double rot_size,  int nsearch, double * coords);
+    //utility subroutine, is in init.cpp
+    void get_aligned_ligand_rmsd(double * oldcoords, double * newcoords, double * backbone_rmsd, double * disp, double * q, double * ligand_rmsd);
     //i/o related stuff -- these are in io.cpp
     void write_dcd_header(FILE * dcdfile);
     void write_dcd_frame(FILE * dcdfile, double * coords);

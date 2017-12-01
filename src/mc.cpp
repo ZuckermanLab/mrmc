@@ -390,7 +390,7 @@ void simulation::mcloop(void)
     subset movedatoms;
     subset changedvol; //which atoms have changed fractional volume
     double * backbone;
-    double q[4],c[3],rmsd;
+    double q[4],c[3],backbone_rmsd,ligand_rmsd;
     clock_t starttime;
     time_t start,end;
     char buffer[255];
@@ -432,7 +432,7 @@ void simulation::mcloop(void)
     if (strlen(mclogfname)>0) {
         mc_log=fopen(mclogfname,"w");
         if (mc_log==NULL) {
-            printf("Could not open MC log file %s\n",xyzfname);
+            printf("Could not open MC log file %s\n",mclogfname);
         } else {
             printf("Will write MC acceptance data to file %s.\n",mclogfname);
         }
@@ -440,6 +440,7 @@ void simulation::mcloop(void)
     if (mc_log==NULL) {
         printf("Will not write MC acceptance data.\n");
     }
+    if (do_ncmc) ncmc_init();
     xwrite = (float *) checkalloc(top->natom,sizeof(float));
     ywrite = (float *) checkalloc(top->natom,sizeof(float));
     zwrite = (float *) checkalloc(top->natom,sizeof(float));
@@ -494,7 +495,6 @@ void simulation::mcloop(void)
     for (i=0; i<EN_TERMS; i++) cum_energies[i]=fresh_energies[i];
     cum_energy=fresh_energy;
     //die();
-    if (do_ncmc) ncmc_init();
     for (istep=1; istep<=nmcstep; istep++) {
 #ifdef TIMERS
          switch_timer(TIMER_MC_MOVE);
@@ -642,8 +642,10 @@ void simulation::mcloop(void)
              //printf("Exact/table/overall energy evaluations: %ld %ld %ld\n",enexactcount,entablecount,enevalcount);
              //printf("Fraction exact/table energy evaluations: %.2f%% %.2f%%\n",100*((double)enexactcount/(double)enevalcount),100*((double)entablecount/(double)enevalcount));
              if (initcoords!=NULL) {
-                 rmsd_fit(top->natom,backbone,initcoords,newcoords,c,q,&rmsd);
-                 printf("Backbone RMSD: %.3f A\n",rmsd);
+                 /*rmsd_fit(top->natom,backbone,initcoords,newcoords,c,q,&rmsd);
+                 printf("Backbone RMSD: %.3f A\n",rmsd);*/
+                 get_aligned_ligand_rmsd(initcoords,newcoords,&backbone_rmsd,c,q,&ligand_rmsd);
+                 printf("Backbone RMSD: %.3f A     Ligand RMSD: %.3f A\n",backbone_rmsd,ligand_rmsd);
              }
          }
 #ifdef EXCHANGE
@@ -684,6 +686,7 @@ void simulation::mcloop(void)
     //if (strlen(restartfname)>0) write_restart(nprevstep+nmcstep,restartfname);
     fclose(xyzoutput);
     if (mc_log!=NULL) fclose(mc_log);
+    if (do_ncmc && ncmc_log!=NULL) fclose(ncmc_log);
     //fclose(quatoutput);
     if (enwrite) {
         fclose(energy_output);

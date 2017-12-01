@@ -60,8 +60,9 @@ int main(int argc, char * argv[])
     simulation * sim;
 #ifdef __unix__
     feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
-    //signal(SIGSEGV,signal_handler);
-    //signal(SIGFPE,signal_handler);
+    signal(SIGSEGV,signal_handler);
+    signal(SIGFPE,signal_handler);
+    signal(SIGABRT,signal_handler);
 #else
 //    _controlfp(0, _EM_ZERODIVIDE | _EM_INVALID | _EM_OVERFLOW);
 #endif

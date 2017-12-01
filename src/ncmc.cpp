@@ -52,7 +52,19 @@ void simulation::ncmc_init(void)
     for (i=0; i<3*top->natom; i++) oldcoords_ncmc[i]=oldcoords[i];
     current_noneq_work=0.0;
     lambda_has_been_changed=false;
+    if (strlen(ncmc_log_fname)>0) {
+        ncmc_log=fopen(ncmc_log_fname,"w");
+        if (ncmc_log==NULL) {
+            printf("Could not open NCMC log file %s.\n",ncmc_log_fname);
+        } else {
+            printf("Will write NCMC acceptance data to file %s.\n",ncmc_log_fname);
+        }
+    }
+    if (ncmc_log==NULL) {
+        printf("Will not write NCMC acceptance data.\n");
+    }
 }
+
 void simulation::adjust_lambdas_and_accumulate_work(long int istep) //, /*double current_energy,*/)
 {
     int isched, found_sched,i;
@@ -107,6 +119,10 @@ void simulation::perform_ncmc_move(void)
     double r,p;
     bool accepted;
     int i;
+    double disp[3],q[4],backbone_rmsd,ligand_rmsd,dist,angle;
+    get_aligned_ligand_rmsd(oldcoords_ncmc,newcoords,&backbone_rmsd,&disp[0],&q[0],&ligand_rmsd);
+    dist=sqrt(disp[0]*disp[0]+disp[1]*disp[1]+disp[2]*disp[2]);
+    angle=2*acos(q[0]);
     natt_ncmc++;
     if (current_noneq_work<0) p=1.0; else p=exp(-beta*current_noneq_work);
     sumprob_ncmc+=p;
@@ -131,5 +147,11 @@ void simulation::perform_ncmc_move(void)
         for (i=0; i<top->natom; i++) old_frac_volumes[i]=new_frac_volumes[i];
     }
     printf("NCMC moves   Attempted %ld   Accepted %ld   Avg. probability = %g\n",natt_ncmc,nacc_ncmc,sumprob_ncmc/natt_ncmc);
+    //data: id number, net distance, net angle, ligand rmsd, noneq. work, acceptance prob, accepted?
+    if (ncmc_log!=NULL) {
+        fprintf(ncmc_log,"%d %g %g %g %g %g %c\n",natt_ncmc,dist,angle*RAD_TO_DEG,ligand_rmsd,current_noneq_work,p,yesno(accepted));
+	fflush(ncmc_log);
+    }
     //mcloop will reset current_noneq_work to zero.
 }
+

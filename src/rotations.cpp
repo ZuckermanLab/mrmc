@@ -722,8 +722,9 @@ void rmsd_fit(int natom, double * weight, double * coords1, double * coords2, do
             coords2[3*iatom+k]+=c2center[k];
         }
     //The center of coords2 is given by (r2-r1) - R(orient) * (r1), where r1 and r2 are the centers of coords1 and coords2.
-    rotate_vector_by_quat(orient,c1center,c1center2);
-    for (k=0; k<3; k++) center[k]=c2center[k]-c1center2[k];
+    //rotate_vector_by_quat(orient,c1center,c1center2);
+    //for (k=0; k<3; k++) center[k]=c2center[k]-c1center2[k];
+    for (k=0; k<3; k++) center[k]=c2center[k]-c1center[k];
 }
 
 //Constructs coordinates for atom "l" using atoms i, j, k, and the bond length (k-l), angle (j-k-l), and dihedral (i-j-k-l)

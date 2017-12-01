@@ -99,10 +99,12 @@ void topology::generate_backbone_moves(vector<mc_move> * backbone_moves)
         phi_move.movedatoms.init(natom);
         phi_move.iaxis=-1;
         phi_move.jaxis=-1;
+        phi_move.is_stiff=false;
         //psiatoms.init(natom);
         psi_move.movedatoms.init(natom);
         psi_move.iaxis=-1;
         psi_move.jaxis=-1;
+        psi_move.is_stiff=false;
         for (iatom=0; iatom<natom; iatom++) if (resinfo[atoms[iatom].resNum].whichseg==resinfo[ires].whichseg) {
             //atoms to be moved for phi move: all atoms in residues N-terminal of the one to be moved, plus N and H from the current residue
             //for psi move: C and O from the current residue, plus all atoms in residues C-terminal of it
@@ -151,6 +153,7 @@ void topology::generate_backrub_moves(vector<mc_move> * backrub_moves)
                 move.movedatoms.init(natom);
                 move.iaxis=resinfo[ires].branchatom;
                 move.jaxis=resinfo[jres].branchatom;
+                move.is_stiff=false;
                 for (iatom=0; iatom<natom; iatom++) {
                     //want C,O from ires, N, H, from jres, all atoms in between
                     if (((atoms[iatom].resNum>ires) && (atoms[iatom].resNum<jres)) ||
@@ -362,7 +365,9 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
         //pick a random move from the list
         moveindex=(int) (genrand_real3()*movecount);
         *movedatoms=movelist[moveindex].movedatoms;
-        if (movelist[moveindex].is_stiff) {
+        //"stiff" moves only possible for ligand bond and sidechain moves 
+        //(there are no stiff designations on AA side chains
+        if (movelist[moveindex].is_stiff && ((move==MOVE_SIDECHAIN) || (move==MOVE_LIGAND_BOND))) {
             angle=(2.0*genrand_real3()-1.0)*stiff_move_size;
         } else {
             //top->print_atom_subset(*movedatoms);
