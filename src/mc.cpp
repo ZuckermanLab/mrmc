@@ -207,7 +207,7 @@ void simulation::moved_energy(int movetype, subset& movedatoms, double * coords,
 #ifdef SEDDD
     ffield->moved_non_tabulated_energy(&solvation_params,current_lambda_vdw,current_lambda_elec,top->ligand,cutoff2,top->natom,top->atoms,movedatoms,changedvol,do_bonds,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
 #else
-    ffield->moved_non_tabulated_energy(eps,rdie,current_lambda,top->ligand,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
+    ffield->moved_non_tabulated_energy(eps,rdie,current_lambda_vdw,current_lambda_elec,top->ligand,cutoff2,top->natom,top->atoms,movedatoms,do_bonds,pair_list->size(),&(*pair_list)[0],coords,energies);
 #endif
 #ifdef TIMERS
     switch_timer(TIMER_GO);
@@ -254,7 +254,7 @@ void simulation::total_energy( double * coords, std::vector<atom_nb_entry> * pai
 #ifdef SEDDD
     ffield->non_tabulated_energy(&solvation_params,current_lambda_vdw,current_lambda_elec,top->ligand,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,frac_volumes,energies);
 #else
-    ffield->non_tabulated_energy(eps,rdie,current_lambda,top->ligand,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,energies);
+    ffield->non_tabulated_energy(eps,rdie,current_lambda_vdw,current_lambda_elec,top->ligand,cutoff2,top->natom,top->atoms,pair_list->size(),&(*pair_list)[0],coords,energies);
 #endif
 #ifdef TIMERS
     switch_timer(TIMER_GO);
@@ -540,8 +540,10 @@ void simulation::mcloop(void)
                  for (k=0; k<3; k++) oldcoords[3*i+k]=newcoords[3*i+k];
              }
              old_pair_list=new_pair_list;
+#ifdef SEDDD
              old_solv_list=new_solv_list;
              for (i=0; i<top->natom; i++) old_frac_volumes[i]=new_frac_volumes[i];
+#endif
              //if (de<=-0.5*DUMMY_ENERGY) cum_energy=total_energy(); //This guards against numerical errors related to "declashing."
          } else {
              //REJECTED
@@ -549,8 +551,10 @@ void simulation::mcloop(void)
                  for (k=0; k<3; k++) newcoords[3*i+k]=oldcoords[3*i+k];
              }
              new_pair_list=old_pair_list;
+#ifdef SEDDD
              new_solv_list=old_solv_list;
              for (i=0; i<top->natom; i++) new_frac_volumes[i]=old_frac_volumes[i];
+#endif
          }
          if (do_ncmc) {
              if ((istep%nsteps_block)==1) {
@@ -589,7 +593,7 @@ void simulation::mcloop(void)
                     write_dcd_frame(xyzoutput,newcoords);
                 } else if (strcasecmp(trajfmt,"PDB")==0) {
                     fprintf(xyzoutput,"MODEL     %4d\n",istep/nsave+1);
-                    top->write_pdb_stream(xyzoutput,newcoords,new_frac_volumes);
+                    top->write_pdb_stream(xyzoutput,newcoords,NULL); //new_frac_volumes);
                     fprintf(xyzoutput,"ENDMDL\n");
                 }
                 //write_frame_quat(quatoutput,istep,newcenter,neworient);

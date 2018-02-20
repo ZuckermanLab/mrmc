@@ -1,0 +1,55 @@
+#!/bin/bash
+
+mpi=0
+#must specify a force field
+defines="-DAMBER"
+#this makes the script work on dvorak also
+if hash CXX 2>/dev/null; then
+	comp=CXX 
+	options="-g  -O3 -axAVX -axSSE4.2 -xSSE2" 
+else
+	comp=g++
+	#options="-g -O2"
+	options="-g  -O3 -ffast-math" # -march=native -mtune=native"
+fi
+name=mrmc-no-seddd
+#read all defines from the command line
+while [ "$#" -gt "0" ]
+do
+	symbol=$1
+	name=`echo $name $symbol | awk '{print tolower($1"-"$2)}'`
+	def=`echo $symbol | awk '{print "-D"toupper($0)}'`
+	if [ "$def" == "-DPROF" ]; then
+		options="$options -pg" #gprof output
+		def=""
+	fi
+	if [ "$def" == "-DPARALLEL" ]; then
+		mpi=1
+	fi
+	if [ "$def" == "-DEXCHANGE" ]; then
+		mpi=1
+	fi
+	if [ "$def" == "-DDEBUG" ]; then
+		options="-g -O0" #debug mode
+		#def="-DDEBUG  -DDEBUG_NON_TABULATED"
+		def="-DDEBUG"
+	fi
+	defines="$defines $def"
+	shift
+done
+if [ "$mpi" == "1" -a "$comp" == "g++" ]; then
+	comp=mpic++
+fi
+
+rm *.o
+#compile all c files
+for f in `ls *.cpp`
+do
+	obj=`echo $f | sed -e 's/\.cpp/.o/g'`
+	$comp -c  $options  $defines  -o $obj $f
+	echo $f $obj
+done
+#link
+#gcc -lm -o tablegen energy.o io.o mt.o rotations.o tablegen.o tables.o
+$comp $options -o $name *.o #libamdlibm.a
+

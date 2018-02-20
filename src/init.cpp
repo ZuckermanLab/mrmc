@@ -151,8 +151,8 @@ void simulation::process_commands(char * infname)
             token=strtok(NULL,delim);
             strncpy(fname,token,sizeof(fname));
             if (strcasecmp("PDB",fmt)==0) {
-                top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,initcoords,old_frac_volumes,ffield);
-                top->write_pdb_file(fname,initcoords,old_frac_volumes); //if old_frac_volumes is not allocated, will write "0.0" in column.
+                //top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,initcoords,old_frac_volumes,ffield);
+                top->write_pdb_file(fname,initcoords,NULL); //old_frac_volumes); //if old_frac_volumes is not allocated, will write "0.0" in column.
             } else if (strcasecmp("PSF",fmt)==0) {
                 top->write_psf_file(fname,ffield);
             /*} else if (strcasecmp("REST",fmt)==0) {
@@ -457,7 +457,9 @@ void simulation::finish_initialization(void)
         printf("Failed to find coordinates for atom %s %d %s\n",top->atoms[iatom].resName,top->atoms[iatom].resNum+1,top->atoms[iatom].name);
         die();
     }
+#ifdef SEDDD
     top->check_solvation_params(&solvation_params);
+#endif
     //ffield->build_coords(initcoords,top->natom,top->atoms,valid_coords);
     //we need to have set up go parameters by now
     /*finish_go_params(&go_params);

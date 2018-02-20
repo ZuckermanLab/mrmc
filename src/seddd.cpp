@@ -8,6 +8,7 @@
 #include "topology.h"
 #include "seddd.h"
 
+#ifdef SEDDD
 #define SCALE_FACTOR 2.0/(4.0*M_PI*sqrt(M_PI))
 void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2, std::vector<atom_nb_entry> * solv_list, double * coords, double * frac_volumes, forcefield * ffield)
 {
@@ -128,3 +129,4 @@ void read_solvation_params(char * line, seddd_params * params)
         params->hydration_shell_thickness[iclass]=thickness;
     }
 }
+#endif

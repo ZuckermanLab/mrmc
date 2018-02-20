@@ -92,8 +92,11 @@ void simulation::adjust_lambdas_and_accumulate_work(long int istep) //, /*double
         internal_energies[i]=0.0;
         intxn_energies[i]=0.0;
     }
+#ifdef SEDDD
     ffield->subset_energy(&solvation_params,cutoff2,top->natom,top->atoms,top->ligand,new_pair_list.size(),&new_pair_list[0],newcoords,new_frac_volumes,internal_energies,intxn_energies);
-
+#else
+    ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,new_pair_list.size(),&new_pair_list[0],newcoords,internal_energies,intxn_energies);
+#endif
     delta_work=(new_lambda_vdw-current_lambda_vdw)*intxn_energies[EN_VDW_EXACT]+(new_lambda_elec-current_lambda_elec)*intxn_energies[EN_ELEC_EXACT];
     /*total_energy(newcoords,&new_pair_list,new_frac_volumes,current_energies,&current_energy);*/
     current_lambda_vdw=new_lambda_vdw;
@@ -143,8 +146,10 @@ void simulation::perform_ncmc_move(void)
         //ensure that "old" and "new" coordinates for regular MC match.
         for (i=0; i<3*top->natom; i++) oldcoords[i]=newcoords[i];
         old_pair_list=new_pair_list;
+#ifdef SEDDD
         old_solv_list=new_solv_list;
         for (i=0; i<top->natom; i++) old_frac_volumes[i]=new_frac_volumes[i];
+#endif
     }
     printf("NCMC moves   Attempted %ld   Accepted %ld   Avg. probability = %g\n",natt_ncmc,nacc_ncmc,sumprob_ncmc/natt_ncmc);
     //data: id number, net distance, net angle, ligand rmsd, noneq. work, acceptance prob, accepted?
