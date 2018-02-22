@@ -1,5 +1,5 @@
-#include <cstdio> 
-#include <vector> 
+#include <cstdio>
+#include <vector>
 #include <cctype>
 //#include "fragments.h"
 #include "topology.h"
@@ -357,6 +357,11 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
         case MOVE_HEAVY_ROT:
             heavy_atom_rot(movedatoms,movesize[MOVE_HEAVY_ROT],actual_size,coords);
             break;
+        case MOVE_SHIFT:
+            *actual_size=0.0; //for now.  Progably wnat to find a way to output the pose numbers to the MC move log.
+            *movedatoms=top->ligand;
+            perform_smmc_move(coords);
+            break;
         default:
             printf("Error in switch statement.\n");
             die();
@@ -365,7 +370,7 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
         //pick a random move from the list
         moveindex=(int) (genrand_real3()*movecount);
         *movedatoms=movelist[moveindex].movedatoms;
-        //"stiff" moves only possible for ligand bond and sidechain moves 
+        //"stiff" moves only possible for ligand bond and sidechain moves
         //(there are no stiff designations on AA side chains
         if (movelist[moveindex].is_stiff && ((move==MOVE_SIDECHAIN) || (move==MOVE_LIGAND_BOND))) {
             angle=(2.0*genrand_real3()-1.0)*stiff_move_size;
@@ -402,28 +407,31 @@ void simulation::read_move_info(FILE * input)
         for (i=1; i<=NUM_MOVES; i++) if (strcasecmp(mc_move_names[i],token)==0) move=i;
         if (move<0) break;
         token+=strlen(token)+1;
-        if ((move==MOVE_LIGAND_TRANS) || (move==MOVE_LIGAND_ROT)) {
+        if (move==MOVE_SHIFT) {
+            sscanf(command,"%s %lg %s %s\n",word,&p,smmc_pdbfname,smmc_movelistfname);
+            //we cannot call generate_smmc_moves now, must wait until top->ligand is initialized in finish_initialization
+        } else if ((move==MOVE_LIGAND_TRANS) || (move==MOVE_LIGAND_ROT)) {
             sscanf(command,"%s %lg %lg %lg %lg\n",word,&p,&size,&frac,&size2);
-            prob[move]=p;
-                movesize[move]=size;
-                large_dist_frac[move]=frac;
-                movesize_large[move]=size2;
-                if (movesize_large[move]<movesize[move]) {
-                    temp=movesize_large[move];
-                    movesize_large[move]=movesize[move];
-                    movesize[move]=temp;
-                    large_dist_frac[move]=1-large_dist_frac[move];
-                }
+            movesize[move]=size;
+            large_dist_frac[move]=frac;
+            movesize_large[move]=size2;
+            if (movesize_large[move]<movesize[move]) {
+                temp=movesize_large[move];
+                movesize_large[move]=movesize[move];
+                movesize[move]=temp;
+                large_dist_frac[move]=1-large_dist_frac[move];
+            } //if movesize_large
+        } else {
+            if (move==MOVE_LIGAND_BOND) {
+                sscanf(command,"%s %lg %lg %lg\n",word,&p, &size, &stiff_move_size);
+                stiff_move_size*=DEG_TO_RAD;
             } else {
-                if (move==MOVE_LIGAND_BOND) {
-                    sscanf(command,"%s %lg %lg %lg\n",word,&p, &size, &stiff_move_size);
-                    stiff_move_size*=DEG_TO_RAD;
-                } else {
-                    sscanf(command,"%s %lg %lg\n",word,&p,&size);
-                }
-                prob[move]=p;
-                movesize[move]=size;
-            }
+                sscanf(command,"%s %lg %lg\n",word,&p,&size);
+            } //if move == MOVE_LIGAND_BOND
+            movesize[move]=size;
+        }
+        prob[move]=p;
+
             //at this point movesize is in degrees if an angular type move.
 
                 //if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) movesize[move]*=DEG_TO_RAD;
@@ -435,7 +443,9 @@ void simulation::read_move_info(FILE * input)
     cumprob[1]=prob[1];
     for(move=2;move<=NUM_MOVES;move++)cumprob[move]=cumprob[move-1]+prob[move];
     for(move=1;move<=NUM_MOVES;move++) {
-        if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
+        if (move==MOVE_SHIFT) {
+            printf("%.20s moves:  Overall fraction %.2f%%",mc_move_names[move],prob[move]*100.0);
+        } else if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
             //strncpy(unit,"degrees\0",sizeof(unit));
             movesize[move]*=DEG_TO_RAD;
             movesize_large[move]*=DEG_TO_RAD;
@@ -444,7 +454,7 @@ void simulation::read_move_info(FILE * input)
                     mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,movesize_large[move]*RAD_TO_DEG,large_dist_frac[move]*100.0);
             } else if (move==MOVE_LIGAND_BOND) {
                 printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees -- Stiff bonds %.2f degrees\n",
-                    mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,stiff_move_size*RAD_TO_DEG);    
+                    mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG,stiff_move_size*RAD_TO_DEG);
             } else {
                 printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f degrees\n",
                     mc_move_names[move],prob[move]*100.0,movesize[move]*RAD_TO_DEG);
@@ -456,7 +466,7 @@ void simulation::read_move_info(FILE * input)
                     mc_move_names[move],prob[move]*100.0,movesize[move],movesize_large[move],large_dist_frac[move]*100.0);
             } else {
                 printf("%.20s moves:  Overall fraction %.2f%% -- Maximum size %.2f A\n",
-                        mc_move_names[move],prob[move]*100.0,movesize[move]);
+                    mc_move_names[move],prob[move]*100.0,movesize[move]);
             }
         }
     }

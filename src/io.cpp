@@ -92,7 +92,7 @@ void topology::read_pdb_stream(FILE * input, double * coords, subset& valid_coor
         coords[3*iatom+1]=y;
         coords[3*iatom+2]=z;
         //found_coords[iatom]=true;
-	valid_coords+=iatom;
+        valid_coords+=iatom;
     }
     //do this later
     /*for (iatom=0; iatom<natom; iatom++) if (!found_coords[iatom]) {
@@ -410,7 +410,7 @@ void simulation::write_dcd_header(FILE * dcdfile)
     if (do_ncmc && !ncmc_write_frames) {
        nf_per_block=1+(nsteps_block-nsteps_temper_move)/nsave;
        hdr.nframes = (nmcstep/nsteps_block)*nf_per_block;
-    } else { 
+    } else {
        hdr.nframes = (nmcstep/nsave);
     }
     hdr.begin = nprevstep + nsave; //I think this is correct for multiple files, but not absolutely sure

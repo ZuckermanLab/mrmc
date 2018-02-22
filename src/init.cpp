@@ -45,6 +45,7 @@ simulation::simulation(void)
     memset(ligand_resname,0,sizeof(ligand_resname));
     initcoords=NULL;
     oldcoords=NULL;
+    smmc_structures=NULL;
     pbc=false;
     aaregion_specified=false;
     initialized=false;
@@ -85,6 +86,7 @@ simulation::~simulation()
     //if (frag_nblist!=NULL) delete frag_nblist;
     if (acc_by_atom!=NULL) free(acc_by_atom);
     if (att_by_atom!=NULL) free(att_by_atom);
+    if (smmc_structures!=NULL) free(smmc_structures);
     delete ffield;
     delete go_model;
     delete top;
@@ -507,6 +509,7 @@ void simulation::finish_initialization(void)
         printf("You cannot have sidechain moves with an empty AA region.\n");
         die();
     }
+    if (prob[MOVE_SHIFT]>0) generate_smmc_trans(smmc_pdbfname,smmc_movelistfname);
     printf("Number of monte carlo steps: %ld\n",nmcstep);
     printf("Save and print frequencies:  %ld %ld\n",nsave,nprint);
     //need these arrays for energy calculations

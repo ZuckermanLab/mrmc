@@ -24,7 +24,8 @@
 #define MOVE_LIGAND_ROT    6
 #define MOVE_HEAVY_TRANS   7
 #define MOVE_HEAVY_ROT     8
-#define NUM_MOVES          8
+#define MOVE_SHIFT         9
+#define NUM_MOVES          9
 
 
 //For some reason the above include files are not prividing these declarations.
@@ -32,7 +33,7 @@
 //class fragmenttype;
 using std::vector;
 
-static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-bond","Ligand-trans","Ligand-rot","Heavy-atom-trans","Heavy-atom-rot"};
+static const char * mc_move_names[NUM_MOVES+1] = {"","Backbone","Sidechain","Backrub","Ligand-bond","Ligand-trans","Ligand-rot","Heavy-atom-trans","Heavy-atom-rot","Shift"};
 
 //for NCMC
 struct lambda_sched_info {
@@ -40,6 +41,10 @@ struct lambda_sched_info {
     double lambda_vdw, lambda_elec;
 };
 
+struct smmc_trans_info {
+    double disp[3];
+    double rot[4];
+};
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
 class simulation {
 private:
@@ -113,6 +118,11 @@ private:
     bool lambda_has_been_changed;
     FILE * ncmc_log;
     char ncmc_log_fname[255];
+    //stuff for SMMC
+    int smmc_nposes;
+    double * smmc_structures;
+    smmc_trans_info * smmc_trans;
+    char smmc_pdbfname[255],smmc_movelistfname[255];
     //double * old_frac_volumes_ncmc;
     //std::vector<atom_nb_entry> old_pair_list_ncmc, old_solv_list_ncmc;
 
@@ -180,6 +190,9 @@ private:
     void start_ncmc_move(void);
     void perform_ncmc_move(void);
     void ncmc_init(void);
+    //for smmc
+    void generate_smmc_trans(char * pdbfname, char * outfname);
+    void perform_smmc_move(double * coords);
 public:
     void comparison_test(void);
 #if defined(PARALLEL) || defined(EXCHANGE)
@@ -189,7 +202,6 @@ public:
 #endif
     ~simulation();
     void process_commands(char * infname);
-
     void finish_initialization(void);
     void mcloop(void);
     void fakeloop(void);
