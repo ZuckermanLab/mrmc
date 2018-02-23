@@ -444,7 +444,7 @@ void simulation::read_move_info(FILE * input)
     for(move=2;move<=NUM_MOVES;move++)cumprob[move]=cumprob[move-1]+prob[move];
     for(move=1;move<=NUM_MOVES;move++) {
         if (move==MOVE_SHIFT) {
-            printf("%.20s moves:  Overall fraction %.2f%%",mc_move_names[move],prob[move]*100.0);
+            printf("%.20s moves:  Overall fraction %.2f%%\n",mc_move_names[move],prob[move]*100.0);
         } else if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
             //strncpy(unit,"degrees\0",sizeof(unit));
             movesize[move]*=DEG_TO_RAD;

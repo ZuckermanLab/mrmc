@@ -10,7 +10,7 @@
 
 #ifdef SEDDD
 #define SCALE_FACTOR 2.0/(4.0*M_PI*sqrt(M_PI))
-void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2, std::vector<atom_nb_entry> * solv_list, double * coords, double * frac_volumes, forcefield * ffield)
+void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2, std::vector<atom_nb_entry> * solv_list, double lambda, double * coords, double * frac_volumes, forcefield * ffield)
 {
     double * group_com;
     double * group_mass;
@@ -55,6 +55,7 @@ void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2
         aux=(r-ri)/lambdai;
         aux=exp(-aux*aux);
         dvi=SCALE_FACTOR*volj*aux/(lambdai*r2);
+        if (ligand[iatom]^ligand[jatom]) dvi*=lambda; //scale contribution when using NCMC
         frac_volumes[iatom]+=dvi;
         /*if (frac_volumes[iatom]>1.0) {
             printf("warning: too high fractional solvation for atom %s %d %s = %.10f\n",atoms[iatom].resName,atoms[iatom].resNum+1,atoms[iatom].name,frac_volumes[iatom]);
@@ -62,6 +63,7 @@ void topology::calculate_solvation_volumes(seddd_params * params, double cutoff2
         aux=(r-rj)/lambdaj;
         aux=exp(-aux*aux);
         dvj=SCALE_FACTOR*voli*aux/(lambdaj*r2);
+        if (ligand[iatom]^ligand[jatom]) dvj*=lambda;
         frac_volumes[jatom]+=dvj;
         /*if (frac_volumes[jatom]>1.0) {
                 printf("warning: too high fractional solvation for atom %s %d %s = %.10f\n",atoms[jatom].resName,atoms[jatom].resNum+1,atoms[jatom].name,frac_volumes[jatom]);

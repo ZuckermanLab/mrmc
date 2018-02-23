@@ -66,12 +66,14 @@ void simulation::ncmc_init(void)
 }
 
 void simulation::adjust_lambdas_and_accumulate_work(long int istep) //, /*double current_energy,*/)
+//void simulation::adjust_lambdas_and_accumulate_work(long int istep, double current_energy)
 {
     int isched, found_sched,i;
     long int reduced_step;
     double new_lambda_vdw, new_lambda_elec, delta_work, _delta_work;
     double internal_energies[EN_TERMS],intxn_energies[EN_TERMS];
-    double current_energies[EN_TERMS],current_energy,new_energies[EN_TERMS],new_energy;
+    double current_energies[EN_TERMS],current_energy;
+    double new_energies[EN_TERMS],new_energy;
     reduced_step = (istep - ncmc_move_start_step + 1);
     if (reduced_step>nsteps_temper_move) return; //not doing ncmc move
     //search the lambda schedule for a corresponding entry
@@ -92,17 +94,21 @@ void simulation::adjust_lambdas_and_accumulate_work(long int istep) //, /*double
         internal_energies[i]=0.0;
         intxn_energies[i]=0.0;
     }
-#ifdef SEDDD
+/*#ifdef SEDDD
     ffield->subset_energy(&solvation_params,cutoff2,top->natom,top->atoms,top->ligand,new_pair_list.size(),&new_pair_list[0],newcoords,new_frac_volumes,internal_energies,intxn_energies);
 #else
     ffield->subset_energy(eps,rdie,cutoff2,top->natom,top->atoms,top->ligand,new_pair_list.size(),&new_pair_list[0],newcoords,internal_energies,intxn_energies);
-#endif
-    delta_work=(new_lambda_vdw-current_lambda_vdw)*intxn_energies[EN_VDW_EXACT]+(new_lambda_elec-current_lambda_elec)*intxn_energies[EN_ELEC_EXACT];
-    /*total_energy(newcoords,&new_pair_list,new_frac_volumes,current_energies,&current_energy);*/
+#endif*/
+    //delta_work=(new_lambda_vdw-current_lambda_vdw)*intxn_energies[EN_VDW_EXACT]+(new_lambda_elec-current_lambda_elec)*intxn_energies[EN_ELEC_EXACT];
+    total_energy(newcoords,&new_pair_list,new_frac_volumes,current_energies,&current_energy);
     current_lambda_vdw=new_lambda_vdw;
     current_lambda_elec=new_lambda_elec;
-    /*total_energy(newcoords,&new_pair_list,new_frac_volumes,new_energies,&new_energy);
-    delta_work=new_energy-current_energy;*/
+    top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,new_lambda_vdw,newcoords,new_frac_volumes,ffield);
+    //by changing lambda, we have effectively changed the "new" fractional volumes; 
+    //therefore we must update the "old" fractional volumes
+    for (i=0; i<top->natom; i++) old_frac_volumes[i]=new_frac_volumes[i];
+    total_energy(newcoords,&new_pair_list,new_frac_volumes,new_energies,&new_energy);
+    delta_work=new_energy-current_energy;
     current_noneq_work+=delta_work;
     //We need to keep track of if there have been any lambda changes in the interval between two energy printouts to avoid the cum/fresh energy check.
     lambda_has_been_changed=true;
@@ -141,7 +147,7 @@ void simulation::perform_ncmc_move(void)
         //ensure that the pair list, solvation list, and fractional volumes are updated to reflect the new (actually old) coordiantes
         if (use_nb_list && !go_only) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&new_pair_list,&new_solv_list,newcoords);
 #ifdef SEDDD
-        if (!go_only) top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
+        if (!go_only) top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,current_lambda_vdw,newcoords,new_frac_volumes,ffield);
 #endif
         //ensure that "old" and "new" coordinates for regular MC match.
         for (i=0; i<3*top->natom; i++) oldcoords[i]=newcoords[i];

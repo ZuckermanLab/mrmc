@@ -486,7 +486,7 @@ void simulation::mcloop(void)
     starttime=clock();
     if (use_nb_list && !go_only) top->create_pair_list(pbc,halfboxsize,boxsize,listcutoff,&old_pair_list,&old_solv_list,oldcoords);
 #ifdef SEDDD
-    if (!go_only) top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,oldcoords,old_frac_volumes,ffield);
+    if (!go_only) top->calculate_solvation_volumes(&solvation_params,cutoff2,&old_solv_list,current_lambda_vdw,oldcoords,old_frac_volumes,ffield);
     total_energy(oldcoords,&old_pair_list,old_frac_volumes,fresh_energies,&fresh_energy);
 #else
     total_energy(oldcoords,&old_pair_list,fresh_energies,&fresh_energy);
@@ -510,7 +510,7 @@ void simulation::mcloop(void)
 #ifdef SEDDD
          //hack to ensure that solvation volumes are not calculaed unless there is at least one residue in atomistic region (ie not go-only)
          if (!go_only) {
-            top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,newcoords,new_frac_volumes,ffield);
+            top->calculate_solvation_volumes(&solvation_params,cutoff2,&new_solv_list,current_lambda_vdw,newcoords,new_frac_volumes,ffield);
             //Identify which atoms have had their exposure change, and use this info in the rules for which pairs of atoms to recalculate.
             changedvol.init(top->natom);
             for (i=0; i<top->natom; i++) if (fabs(new_frac_volumes[i]-old_frac_volumes[i])>solvation_params.frac_vol_tol) changedvol+=i;
@@ -566,7 +566,6 @@ void simulation::mcloop(void)
              if ((istep>=ncmc_move_start_step) && (istep<=ncmc_move_end_step)) {
                 //we are in the middle of an NCMC move
                 adjust_lambdas_and_accumulate_work(istep);
-
              }
              //this will eventually be replaced by a subroutine for accepting/rejecting the NCMC move
              if (istep==ncmc_move_end_step) {

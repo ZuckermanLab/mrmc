@@ -186,7 +186,7 @@ struct topology {
     double born_solvation_energy2(forcefield * ffield, int ifrag, int jfrag, double tau, double rkl2, double * coords, double xx);
     double born_solvation_energy4(forcefield * ffield, int ifrag, int jfrag, double tau, double rkl2, double * coords, double akal);*/
 #ifdef SEDDD
-    void calculate_solvation_volumes(seddd_params * params, double cutoff2, std::vector<atom_nb_entry> * solv_list, double * coords, double * frac_volumes, forcefield * ffield);
+    void calculate_solvation_volumes(seddd_params * params, double cutoff2, std::vector<atom_nb_entry> * solv_list, double lambda,  double * coords, double * frac_volumes, forcefield * ffield);
     void check_solvation_params(seddd_params * params);
 #endif
 };
