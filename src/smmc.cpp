@@ -13,7 +13,7 @@ void simulation::generate_smmc_trans(char * pdbfname, char * outfname)
     FILE * input;
     FILE * output;
     subset valid_coords;
-    int ipose, jpose,index;
+    int ipose, jpose,index, iatom, k;
     double backbone_rmsd,ligand_rmsd;
     smmc_nposes = 0;
     smmc_structures=NULL;
@@ -21,6 +21,8 @@ void simulation::generate_smmc_trans(char * pdbfname, char * outfname)
     printf("Reading poses from file %s.\n",pdbfname);
     for (;;) {
         smmc_structures=(double *) checkrealloc(smmc_structures,((smmc_nposes+1)*3*top->natom),sizeof(double));
+        //not all atoms may be read -- we may use only the backbone atoms
+        for (iatom=0; iatom<top->natom; iatom++) for (k=0; k<3; k++) smmc_structures[3*top->natom*smmc_nposes+3*iatom+k]=0.0;
         top->read_pdb_stream(input,&smmc_structures[3*top->natom*smmc_nposes],valid_coords);
     	if (feof(input)) break;
         smmc_nposes++;
@@ -36,8 +38,9 @@ void simulation::generate_smmc_trans(char * pdbfname, char * outfname)
     output = fopen(outfname,"w");
     fprintf(output,"%d\n",smmc_nposes);
     for (ipose=0; ipose<smmc_nposes; ipose++)
-        for (jpose=0; jpose<smmc_nposes; jpose++) {
+        for (jpose=0; jpose<smmc_nposes; jpose++) if (ipose!=jpose) {
             index=ipose*smmc_nposes+jpose;
+            printf("Aligning poses %d %d\n",ipose,jpose);
             get_aligned_ligand_rmsd(&smmc_structures[3*top->natom*ipose],&smmc_structures[3*top->natom*jpose],&backbone_rmsd,
                     &smmc_trans[index].disp[0],&smmc_trans[index].rot[0],&ligand_rmsd);
             fprintf(output,"%d %d %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n",ipose+1,jpose+1,
@@ -92,7 +95,13 @@ void simulation::perform_smmc_move(double * coords)
     //backbone_disp and backbone_q are the transformation needed to take structure ipose to the current coordinates.
     //smmc_trans[index] contains the transformation needed in the frame of reference of structure ipose.
     conjugate_quat(&backbone_q[0],&backbone_q_conj[0]);
-    //multiply_quat(&backbone_q_conj[0],&smmc_trans[index].rot[0],&q1[0]);
+    //we need to construct a quaternion representing a rotation of the same size as smmc_trans.rot,
+    //but has been rotated through backbone_q_conj
+    //the quaternion algebra version of this is (backbone_q_conj) * (smmc_trans.rot) * (backbone_q)
+    //but we can also do this by calling rotate_vector_by_quat on the imaginary components of smmc_trans.rot
+    q1[0] = smmc_trans[index].rot[0];
+    rotate_vector_by_quat(&backbone_q_conj[0],&smmc_trans[index].rot[1],&q1[1]);
+    //we do the same for the translational part of smmc_trans
     rotate_vector_by_quat(&backbone_q_conj[0],&smmc_trans[index].disp[0],&disp1[0]);
     //disp1 and q1 are the transformation we need, in our current frame of reference.
     //rotate the ligand through q1 about center of mass
