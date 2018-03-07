@@ -44,6 +44,7 @@ struct lambda_sched_info {
 struct smmc_trans_info {
     double disp[3];
     double rot[4];
+    double * dih_diff;
 };
 /*File names: coordinate output, quaternion output, starting restart file (if needed), ending restart file*/
 class simulation {
@@ -123,6 +124,7 @@ private:
     double * smmc_structures;
     smmc_trans_info * smmc_trans;
     char smmc_pdbfname[255],smmc_movelistfname[255];
+    bool shift_moves_uncoupled_only,smmc_sidechain_rotations;
     //double * old_frac_volumes_ncmc;
     //std::vector<atom_nb_entry> old_pair_list_ncmc, old_solv_list_ncmc;
 
@@ -163,8 +165,8 @@ private:
     //MC move support -- these are in mcmoves.cpp
     void read_move_info(FILE * input);
     void mcmove(int * movetype, subset * movedatoms, double * actual_size, double * coords);
-    void rotate_atoms_by_axis(mc_move * move, const double angle, double * coords);
-    void rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords);
+    void rotate_atoms_by_axis(mc_move& move, const double angle, double * coords);
+    void rotate_atoms_by_point(subset& atoms, const double * quat, const double * point, double * coords);
     void do_ligand_trans(double movesize_small, double large_dist_frac, double movesize_large, double * actual_size, double * coords);
     void do_ligand_rot(double movesize_small, double large_dist_frac, double movesize_large, double * actual_size, double * coords);
     void heavy_atom_trans(subset * movedatoms, double movesize, double * actual_size, double * coords);
@@ -192,7 +194,7 @@ private:
     void ncmc_init(void);
     //for smmc
     void generate_smmc_trans(char * pdbfname, char * outfname);
-    void perform_smmc_move(double * coords);
+    void perform_smmc_move(subset * movedatoms, double * coords);
 public:
     void comparison_test(void);
 #if defined(PARALLEL) || defined(EXCHANGE)

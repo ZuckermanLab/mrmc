@@ -360,6 +360,23 @@ double dihedral(double a[],double b[],double c[]){
   return dihed;
 }
 
+double dihedral_angle(double * coords, int a, int b, int c, int d)
+{
+    double ab[3],bc[3],cd[3],dihed;
+    ab[0] = coords[3*b]   - coords[3*a];
+    ab[1] = coords[3*b+1] - coords[3*a+1];
+    ab[2] = coords[3*b+2] - coords[3*a+2];
+
+    bc[0] = coords[3*c]   - coords[3*b];
+    bc[1] = coords[3*c+1] - coords[3*b+1];
+    bc[2] = coords[3*c+2] - coords[3*b+2];
+
+    cd[0] = coords[3*d]   - coords[3*c];
+    cd[1] = coords[3*d+1] - coords[3*c+1];
+    cd[2] = coords[3*d+2] - coords[3*c+2];
+    return dihedral(ab,bc,cd);
+}
+
 //Nonbonded energy for an individual atom pair.  The electrostatic energy returned by this subroutine does not have the Coulomb constant or dielectric constant for efficiency reasons.
 void forcefield::nonbond_energy( int rdie, int type1,  int type2, int is14, double r2, double * evdw, double * eelec)
 {

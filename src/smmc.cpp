@@ -13,8 +13,8 @@ void simulation::generate_smmc_trans(char * pdbfname, char * outfname)
     FILE * input;
     FILE * output;
     subset valid_coords;
-    int ipose, jpose,index, iatom, k;
-    double backbone_rmsd,ligand_rmsd;
+    int ipose, jpose,index, iatom, k, idih,ndih;
+    double backbone_rmsd,ligand_rmsd,dih1,dih2;
     smmc_nposes = 0;
     smmc_structures=NULL;
     input = fopen(pdbfname,"r");
@@ -37,6 +37,8 @@ void simulation::generate_smmc_trans(char * pdbfname, char * outfname)
     smmc_trans = (smmc_trans_info *) checkalloc(smmc_nposes*smmc_nposes,sizeof(smmc_trans_info));
     output = fopen(outfname,"w");
     fprintf(output,"%d\n",smmc_nposes);
+    for (index=0; index<smmc_nposes*smmc_nposes; index++) smmc_trans[index].dih_diff=NULL;
+    ndih=sidechain_moves.size();
     for (ipose=0; ipose<smmc_nposes; ipose++)
         for (jpose=0; jpose<smmc_nposes; jpose++) if (ipose!=jpose) {
             index=ipose*smmc_nposes+jpose;
@@ -46,15 +48,23 @@ void simulation::generate_smmc_trans(char * pdbfname, char * outfname)
             fprintf(output,"%d %d %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n",ipose+1,jpose+1,
                     smmc_trans[index].disp[0],smmc_trans[index].disp[1],smmc_trans[index].disp[2],
                     smmc_trans[index].rot[0],smmc_trans[index].rot[1],smmc_trans[index].rot[2],smmc_trans[index].rot[3]);
+            smmc_trans[index].dih_diff=(double *) checkalloc(ndih,sizeof(double));
+            for (idih=0; idih<ndih; idih++) {
+                dih1=dihedral_angle(&smmc_structures[3*top->natom*ipose],sidechain_moves[idih].iaxis_prev,sidechain_moves[idih].iaxis,
+                                    sidechain_moves[idih].jaxis,sidechain_moves[idih].jaxis_succ);
+                dih2=dihedral_angle(&smmc_structures[3*top->natom*jpose],sidechain_moves[idih].iaxis_prev,sidechain_moves[idih].iaxis,
+                                    sidechain_moves[idih].jaxis,sidechain_moves[idih].jaxis_succ);
+                smmc_trans[index].dih_diff[idih]=dih2-dih1;
+            }
     }
     fclose(output);
 }
 
 
 
-void simulation::perform_smmc_move(double * coords)
+void simulation::perform_smmc_move(subset * movedatoms, double * coords)
 {
-    int ipose, ipose_closest, jpose, index,iatom,k;
+    int ipose, ipose_closest, jpose, index,iatom,k,idih;
     double * wt_backbone;
     double disp1[3],q1[4],matrix[3][3], ligand_com[3],origin[3];
     double backbone_disp[3],backbone_q[4],backbone_q_conj[4],backbone_rmsd,ligand_rmsd,closest_ligand_rmsd;
@@ -77,11 +87,11 @@ void simulation::perform_smmc_move(double * coords)
     }
     //choose a random transformation from smmc_trans
     do {
-        jpose=int(smmc_nposes*genrand_real3()); 
+        jpose=int(smmc_nposes*genrand_real3());
     } while (ipose_closest==jpose);
 #ifdef DEBUG
     printf("Shift move pose %d %d\n",ipose_closest,jpose);
-#endif    
+#endif
     index=ipose_closest*smmc_nposes+jpose;
     //the transformation is in the frame of reference of structure "ipose".
     //We need to transform it to the frame of reference of hte current structure.
@@ -110,6 +120,16 @@ void simulation::perform_smmc_move(double * coords)
     //translate by disp1
     for (iatom=0; iatom<top->natom; iatom++) if (top->ligand[iatom]) {
         for (k=0; k<3; k++) coords[3*iatom+k]+=disp1[k];
+    }
+    *movedatoms=top->ligand;
+    //do sidechain rotations
+    if (smmc_sidechain_rotations) {
+        for (idih=0; idih<sidechain_moves.size(); idih++) {
+            //the minus sign here corrects for a difference in the sense of rotate_axis_by_angle
+            //compared to dihedral_angle
+            rotate_atoms_by_axis(sidechain_moves[idih],-smmc_trans[index].dih_diff[idih],coords);
+            (*movedatoms)|=sidechain_moves[idih].movedatoms;
+        }
     }
     //we're done
     free(wt_backbone);

@@ -233,6 +233,7 @@ public:
 double angle(double a[], double b[]);
 //justin altered this to return the cosine of the dihedral
 double dihedral(double a[],double b[],double c[]);
-
+//this is called by smmc to determine dihedral angles
+double dihedral_angle(double * coords, int a, int b, int c, int d);
 
 #endif// __MAIN_H__

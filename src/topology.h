@@ -52,6 +52,8 @@ struct resfraginfo {
 struct mc_move {
     //atoms forming axis around which
     int iaxis, jaxis;
+    //these define a dihedral "iaxis_prev - iaxis - jaxis - jaxis_succ" for rotations as part of smmc
+    int iaxis_prev, jaxis_succ;
     bool is_stiff;
     subset movedatoms;
     //void perform(double * coords);

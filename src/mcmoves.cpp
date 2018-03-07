@@ -9,7 +9,7 @@
 #include "mt.h"
 #include "util.h"
 //Rotate a selection of fragments about an axis through two atoms.  Does not support PBC.
-void simulation::rotate_atoms_by_axis(mc_move * move, const double angle, double * coords)
+void simulation::rotate_atoms_by_axis(mc_move& move, const double angle, double * coords)
 {
   int iatom,k;
   double axis[3],point[3],axism,quat[4],newquat[4];
@@ -17,17 +17,17 @@ void simulation::rotate_atoms_by_axis(mc_move * move, const double angle, double
   //Compute the axis
   axism=0.0;
   for (k=0; k<3; k++) {
-      axis[k]=coords[3*move->jaxis+k]-coords[3*move->iaxis+k];
+      axis[k]=coords[3*move.jaxis+k]-coords[3*move.iaxis+k];
       axism+=axis[k]*axis[k];
-      point[k]=coords[3*move->iaxis+k];
+      point[k]=coords[3*move.iaxis+k];
   }
   axism=sqrt(axism);
   for (k=0; k<3; k++) axis[k]/=axism;
   axisangle_to_quat(angle,axis,quat);
-  rotate_atoms_by_point(move->movedatoms,&quat[0],&point[0],coords);
+  rotate_atoms_by_point(move.movedatoms,&quat[0],&point[0],coords);
 }
 
-void simulation::rotate_atoms_by_point(subset atoms, const double * quat, const double * point, double * coords)
+void simulation::rotate_atoms_by_point(subset& atoms, const double * quat, const double * point, double * coords)
 {
     double rotmatrix[3][3];
     double disp[3],newdisp[3];
@@ -173,7 +173,7 @@ void topology::generate_backrub_moves(vector<mc_move> * backrub_moves)
 
 void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vector<mc_move> * ligand_bond_rotation_moves)
 {
-    int ires,restype;
+    int ires,restype,ii,katom;
     int ibond,iatom,nligand,n;
     mc_move newmove;
     subset exclude;
@@ -192,6 +192,24 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vecto
 
             newmove.iaxis=find_atom(ires,resdef[restype].iname[ibond]);
             newmove.jaxis=find_atom(ires,resdef[restype].jname[ibond]);
+            //search for a non-hydrogen bonded to atom newmove.iaxis, if one exists; else just use the first bonded atom
+            newmove.iaxis_prev=-1;  
+            for (ii=0; ii<atoms[newmove.iaxis].numOfBondedAtoms; ii++) {
+                katom=atoms[newmove.iaxis].bondedAtomList[ii];
+		if (katom!=newmove.jaxis) {
+                    newmove.iaxis_prev=katom;
+                    if (atoms[katom].atomicNum>1) break; //it will go thru all three hydrogen atoms in a -CH3 group
+                }
+            }
+            //do the same for jaxis_succ
+            newmove.jaxis_succ=atoms[newmove.jaxis].bondedAtomList[0];
+            for (ii=0; ii<atoms[newmove.jaxis].numOfBondedAtoms; ii++) {
+                katom=atoms[newmove.jaxis].bondedAtomList[ii];
+                if (katom!=newmove.iaxis) {
+                    newmove.jaxis_succ=katom;
+                    if (atoms[katom].atomicNum>1) break;
+                }
+            }
             newmove.is_stiff=resdef[restype].is_stiff[ibond];
             exclude.init(natom);
             exclude+=newmove.iaxis;
@@ -218,12 +236,16 @@ void topology::generate_sidechain_moves(vector<mc_move> * sidechain_moves, vecto
 #ifdef DEBUG
             printf("Adding sidechain move:\n");
             print_atom_subset(newmove.movedatoms);
+            printf("Dihedral: %s %d %s %s %s %s\n",atoms[newmove.iaxis].resName,atoms[newmove.iaxis].resNum+1,
+                atoms[newmove.iaxis_prev].name,atoms[newmove.iaxis].name,atoms[newmove.jaxis].name,atoms[newmove.jaxis_succ].name);
 #endif
         }
         //do something about prolines
         if (strcasecmp(resdef[restype].name,"PRO")==0) {
             newmove.iaxis=find_atom(ires,"CB");
             newmove.jaxis=find_atom(ires,"CD");
+            newmove.iaxis_prev=find_atom(ires,"CA");
+            newmove.jaxis_succ=find_atom(ires,"CG");
             newmove.movedatoms.init(natom);
             newmove.movedatoms+=find_atom(ires,"CG");
             newmove.movedatoms+=find_atom(ires,"HG1");
@@ -318,11 +340,13 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
     int moveindex,move, movecount;
     double angle,r;
     movedatoms->init(top->natom);
-
-    r=genrand_real3();
-    for (move=1; move<=NUM_MOVES; move++) {
-        if (r<=cumprob[move]) break;
-    }
+    //a hack to ensure that when the flag is set, shift moves can only be used when uncoupled for NCMC
+    do {
+       r=genrand_real3();
+       for (move=1; move<=NUM_MOVES; move++) {
+           if (r<=cumprob[move]) break;
+       }
+    } while ((move==MOVE_SHIFT) && do_ncmc && shift_moves_uncoupled_only && (current_lambda_vdw>0));
     *movetype=move;
     //choose one of the lists from which to select the move; getting a pointer to the vector object itself
     //results in memory errors
@@ -359,8 +383,8 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
             break;
         case MOVE_SHIFT:
             *actual_size=0.0; //for now.  Progably wnat to find a way to output the pose numbers to the MC move log.
-            *movedatoms=top->ligand;
-            perform_smmc_move(coords);
+            //*movedatoms=top->ligand;
+            perform_smmc_move(movedatoms,coords);
             break;
         default:
             printf("Error in switch statement.\n");
@@ -379,7 +403,7 @@ void simulation::mcmove(int * movetype, subset * movedatoms, double * actual_siz
             angle=(2.0*genrand_real3()-1.0)*movesize[move];
         }
         *actual_size=angle;
-        rotate_atoms_by_axis(&movelist[moveindex],angle,coords);
+        rotate_atoms_by_axis(movelist[moveindex],angle,coords);
     }
 }
 
@@ -408,10 +432,12 @@ void simulation::read_move_info(FILE * input)
         if (move<0) break;
         token+=strlen(token)+1;
         if (move==MOVE_SHIFT) {
-            sscanf(command,"%s %lg %s %s\n",word,&p,smmc_pdbfname,smmc_movelistfname);
+            sscanf(command,"%s %lg %s %s",word,&p,smmc_pdbfname,smmc_movelistfname);
+            shift_moves_uncoupled_only=((strstr(command,"UNCOUPLEDONLY")!=NULL) || (strstr(command,"uncoupledonly")!=NULL));
+            smmc_sidechain_rotations=((strstr(command,"SIDECHAIN")!=NULL) || (strstr(command,"sidechain")!=NULL));
             //we cannot call generate_smmc_moves now, must wait until top->ligand is initialized in finish_initialization
         } else if ((move==MOVE_LIGAND_TRANS) || (move==MOVE_LIGAND_ROT)) {
-            sscanf(command,"%s %lg %lg %lg %lg\n",word,&p,&size,&frac,&size2);
+            sscanf(command,"%s %lg %lg %lg %lg",word,&p,&size,&frac,&size2);
             movesize[move]=size;
             large_dist_frac[move]=frac;
             movesize_large[move]=size2;
@@ -423,10 +449,10 @@ void simulation::read_move_info(FILE * input)
             } //if movesize_large
         } else {
             if (move==MOVE_LIGAND_BOND) {
-                sscanf(command,"%s %lg %lg %lg\n",word,&p, &size, &stiff_move_size);
+                sscanf(command,"%s %lg %lg %lg",word,&p, &size, &stiff_move_size);
                 stiff_move_size*=DEG_TO_RAD;
             } else {
-                sscanf(command,"%s %lg %lg\n",word,&p,&size);
+                sscanf(command,"%s %lg %lg",word,&p,&size);
             } //if move == MOVE_LIGAND_BOND
             movesize[move]=size;
         }
@@ -445,6 +471,14 @@ void simulation::read_move_info(FILE * input)
     for(move=1;move<=NUM_MOVES;move++) {
         if (move==MOVE_SHIFT) {
             printf("%.20s moves:  Overall fraction %.2f%%\n",mc_move_names[move],prob[move]*100.0);
+            if (do_ncmc && (prob[MOVE_SHIFT]>0) && shift_moves_uncoupled_only) {
+               printf("Shift moves will only be done when ligand fully uncoupled (lambda_VDW=0).\n");
+            }
+            if ((prob[MOVE_SHIFT]>0) && smmc_sidechain_rotations) {
+               printf("Shift moves will include sidechain rotations.\n");
+            } else {
+               printf("Shift moves will involve ligand motions only.\n");
+            }
         } else if ((move!=MOVE_LIGAND_TRANS) && (move!=MOVE_HEAVY_TRANS)) {
             //strncpy(unit,"degrees\0",sizeof(unit));
             movesize[move]*=DEG_TO_RAD;

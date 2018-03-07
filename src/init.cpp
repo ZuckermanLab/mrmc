@@ -46,6 +46,7 @@ simulation::simulation(void)
     initcoords=NULL;
     oldcoords=NULL;
     smmc_structures=NULL;
+    smmc_trans=NULL;
     pbc=false;
     aaregion_specified=false;
     initialized=false;
@@ -57,6 +58,8 @@ simulation::simulation(void)
     current_lambda_vdw=1.0;
     current_lambda_elec=1.0;
     ncmc_write_frames = false;
+    shift_moves_uncoupled_only=false;
+    smmc_sidechain_rotations=false;
 }
 
 
@@ -87,6 +90,11 @@ simulation::~simulation()
     if (acc_by_atom!=NULL) free(acc_by_atom);
     if (att_by_atom!=NULL) free(att_by_atom);
     if (smmc_structures!=NULL) free(smmc_structures);
+    if (smmc_trans!=NULL) {
+        for (i=0; i<smmc_nposes*smmc_nposes; i++)
+            if (smmc_trans[i].dih_diff!=NULL) free(smmc_trans[i].dih_diff);
+        free(smmc_trans);
+    }
     delete ffield;
     delete go_model;
     delete top;
@@ -268,6 +276,9 @@ void simulation::process_commands(char * infname)
                 printf("Frames within NCMC moves will be written to the trajectory.\n");
             } else {
                 printf("Frames within NCMC moves will not be written to the trajectory.\n");
+            }
+            if ((prob[MOVE_SHIFT]>0) && shift_moves_uncoupled_only) {
+               printf("Shift moves will only be done when ligand fully uncoupled (lambda_VDW=0).\n");
             }
             read_lambda_schedule(fname);
             //printf("ncmc_log_fname: %s\n",ncmc_log_fname);
@@ -659,7 +670,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*M_PI;
-                rotate_atoms_by_axis(&ligand_bond_rotation_moves[imove],angle,private_coords);
+                rotate_atoms_by_axis(ligand_bond_rotation_moves[imove],angle,private_coords);
             //}
         }
     //Begin search for a low-energy ligand conformation
@@ -684,7 +695,7 @@ void simulation::prepare_docking(double trans_size, double rot_size, int nsearch
             //in theory there should be no bonds connecting the ligand to anything, but for safety we check both
             //if (top->ligand[ligand_bond_rotation_moves[imove].iaxis] && top->ligand[ligand_bond_rotation_moves[imove].jaxis]) {
                 angle=(2.0*genrand_real3()-1.0)*M_PI;
-                rotate_atoms_by_axis(&ligand_bond_rotation_moves[imove],angle,private_coords2);
+                rotate_atoms_by_axis(ligand_bond_rotation_moves[imove],angle,private_coords2);
             //}
         }
         //check teh energy
